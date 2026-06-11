@@ -422,6 +422,20 @@ Mu2eKinKal : {
     ToCRV : true
   }
 
+  CHCRVXTRAP : {
+    IntersectionTolerance : 0.1
+    MaxDt : 500.0 # generous smoke-test limit for CRV crossings
+    MaxDtStep : 1.0 # (ns)
+    MinV : 1e-5 # mm/ns
+    BCorrTolerance : 1e-2 # momemntum fraction
+    ToTrackerEnds : false
+    Upstream : false
+    BackToTracker : false
+    ToOPA : false
+    ToCRV : true
+    Debug : 2
+  }
+
   CENTRALHELIX : {
     SeedMomentum : 10000.0
     SeedCharge : 1
