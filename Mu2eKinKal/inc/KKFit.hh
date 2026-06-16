@@ -861,6 +861,20 @@ namespace mu2e {
       crvxing->materialEffects(dmom,paramomvar,perpmomvar);
       inters.emplace_back(ktraj.stateEstimate(crvxing->time()),XYZVectorF(ktraj.bnom()),crvxing->surfaceId(),crvxing->intersection(),dmom);
     }
+    for(auto const& matxing : kktrk.materialCylXings()){
+      double stime = matxing->time() - epsilon;
+      auto const& ktraj = ptraj.nearestPiece(stime);
+      double dmom,paramomvar,perpmomvar;
+      matxing->materialEffects(dmom,paramomvar,perpmomvar);
+      inters.emplace_back(ktraj.stateEstimate(matxing->time()),XYZVectorF(ktraj.bnom()),matxing->surfaceId(),matxing->intersection(),dmom);
+    }
+    for(auto const& matxing : kktrk.materialPlaneXings()){
+      double stime = matxing->time() - epsilon;
+      auto const& ktraj = ptraj.nearestPiece(stime);
+      double dmom,paramomvar,perpmomvar;
+      matxing->materialEffects(dmom,paramomvar,perpmomvar);
+      inters.emplace_back(ktraj.stateEstimate(matxing->time()),XYZVectorF(ktraj.bnom()),matxing->surfaceId(),matxing->intersection(),dmom);
+    }
     // record other intersections saved in the track
     for(auto const& interpair : kktrk.intersections()) {
       auto const& sid = std::get<0>(interpair);

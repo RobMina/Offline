@@ -90,13 +90,16 @@ namespace mu2e {
       // try to intersect
       auto newinter = KinKal::intersect(fittraj,*sector.sector_,trange,intertol_,tdir);
       if(debug_ > 3)std::cout << "CRV " << newinter  << std::endl;
-      if(newinter.good()){
-        inters_.emplace_back(newinter,sector.whw_,(int)isect);
-        if(debug_ > 1)std::cout << "Good CRV " <<  newinter << " sector " << sector.sname_ << std::endl;
-      } else if ( newinter.onsurface_ && newinter.inbounds_) { // inbounds might be too strict for CentralHelix tracks, will need to check TODO
-        retval |= trange.beyond(newinter.time_,tdir);
-        // there's a potential intersection, but the trajectory hasn't gotten there yet. Tell the track to keep extending
-        if(trange.beyond(newinter.time_,tdir) && debug_ > 2)std::cout << "Potential CRV " <<  newinter << std::endl;
+      if(newinter.onsurface_){
+        if(trange.beyond(newinter.time_,tdir)){
+          // intersection is ahead (beyond trange in extrapolation direction): keep extending
+          retval = true;
+          if(debug_ > 2)std::cout << "Potential CRV " <<  newinter << std::endl;
+        } else {
+          // intersection is within trange: accept it regardless of inbounds_ (too strict for CentralHelix after large material crossings)
+          inters_.emplace_back(newinter,sector.whw_,(int)isect);
+          if(debug_ > 1)std::cout << "Good CRV " <<  newinter << " sector " << sector.sname_ << std::endl;
+        }
       }
     }
     // sort intersections in the time direction

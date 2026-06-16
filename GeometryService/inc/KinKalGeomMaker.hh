@@ -7,15 +7,18 @@
 #include "Offline/KinKalGeom/inc/KinKalGeom.hh"
 #include "Offline/KinKalGeom/inc/KKMaterial.hh"
 namespace mu2e {
+  class SimpleConfig;
   class KinKalGeomMaker {
     public:
-      KinKalGeomMaker(int debug) : debug_(debug) {}
+      KinKalGeomMaker(SimpleConfig const& config, int debug) : config_(config), debug_(debug) {}
       std::unique_ptr<KinKalGeom>& makeKKG();
     private:
       void makeTracker();
       void makeDS();
       void makeTarget();
       void makeCRV();
+      void makePassiveMaterials();
+      SimpleConfig const& config_;
       std::unique_ptr<KinKalGeom> kkg_;
       int debug_ = 0;
   };

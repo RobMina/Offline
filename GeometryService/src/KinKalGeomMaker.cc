@@ -14,9 +14,12 @@
 #include "Offline/BeamlineGeom/inc/Beamline.hh"
 #include "Offline/GeometryService/inc/DetectorSystem.hh"
 #include "Offline/DetectorSolenoidGeom/inc/DetectorSolenoid.hh"
+#include "Offline/ConfigTools/inc/SimpleConfig.hh"
+#include "CLHEP/Vector/ThreeVector.h"
 #include "cetlib_except/exception.h"
 #include <cmath>
 #include <algorithm>
+#include <string>
 
 namespace mu2e {
   using KinKal::VEC3;
@@ -42,6 +45,7 @@ namespace mu2e {
     makeDS();
     makeTarget();
     makeCRV();
+    makePassiveMaterials();
     return kkg_;
   }
 
@@ -123,6 +127,27 @@ namespace mu2e {
     auto outer= std::make_shared<Cylinder>(VEC3(0.0,0.0,1.0),VEC3(0.0,0.0,-1482),ds->rOut2(),ds->halfLength()); // bounding surfaces
     auto front= std::make_shared<Disk>(outer->frontDisk());
     auto back= std::make_shared<Disk>(outer->backDisk());
+    KKGeom::DetectorSolenoid::MaterialCylinderCollection materialCylinders;
+    auto toDetectorZ = [&det](double zmu2e) {
+      return VEC3(det->toDetector(CLHEP::Hep3Vector(0.0,0.0,zmu2e))).Z();
+    };
+    auto addMaterialCylinder = [this,&materialCylinders,&toDetectorZ](SurfaceId const& sid,
+        double rin, double rout, double zcenter, double halfLength, std::string const& material) {
+      auto cylinder = std::make_shared<Cylinder>(VEC3(0.0,0.0,1.0),
+          VEC3(0.0,0.0,toDetectorZ(zcenter)),0.5*(rin+rout),halfLength);
+      materialCylinders.emplace_back(sid,cylinder,material,rout-rin);
+      kkg_->map_.emplace(std::make_pair(sid,std::static_pointer_cast<Surface>(cylinder)));
+    };
+    addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_CryoInner),ds->rIn1(),ds->rIn2(),ds->position().z(),ds->halfLength(),ds->material());
+    addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_CryoOuter),ds->rOut1(),ds->rOut2(),ds->position().z(),ds->halfLength(),ds->material());
+    addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_ShieldInner),ds->shield_rIn1(),ds->shield_rIn2(),ds->position().z(),ds->shield_halfLength(),ds->shield_material());
+    addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_ShieldOuter),ds->shield_rOut1(),ds->shield_rOut2(),ds->position().z(),ds->shield_halfLength(),ds->shield_material());
+    for(size_t icoil = 0; icoil < static_cast<size_t>(ds->nCoils()); icoil++){
+      auto material = ds->coilVersion() == 1 ? ds->coil_material() : ds->coil_materials().at(icoil);
+      double halflen = 0.5*ds->coil_zLength().at(icoil);
+      addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_Coil,static_cast<int>(icoil)),
+          ds->coil_rIn(),ds->coil_rOut().at(icoil),ds->coil_zPosition().at(icoil)+halflen,halflen,material);
+    }
 
 
     // hard-coded for now
@@ -142,7 +167,7 @@ namespace mu2e {
     kkg_->map_.emplace(std::make_pair(SurfaceId(SurfaceIdEnum::OPA),std::static_pointer_cast<Surface>(opa)));
     kkg_->map_.emplace(std::make_pair(SurfaceId(SurfaceIdEnum::TSDA),std::static_pointer_cast<Surface>(tsda)));
 
-    kkg_->ds_ = std::make_unique<KKGeom::DetectorSolenoid>(inner, outer, front, back, ipa, ipafront, ipaback, opa, tsda);
+    kkg_->ds_ = std::make_unique<KKGeom::DetectorSolenoid>(inner, outer, front, back, ipa, ipafront, ipaback, opa, tsda, materialCylinders);
   }
 
   void KinKalGeomMaker::makeTarget() {
@@ -280,6 +305,108 @@ namespace mu2e {
     for(auto const& sector : kkg_->crv_->sectors()){
       kkg_->map_.emplace(std::make_pair(SurfaceId(sector.sname_),std::static_pointer_cast<Surface>(sector.sector_)));
       isect++;
+    }
+  }
+
+  void KinKalGeomMaker::makePassiveMaterials() {
+    GeomHandle<DetectorSystem> det;
+    double const invSqrt3 = 1.0/std::sqrt(3.0);
+    // Model the ExtShieldDownstream Type 2 regular concrete roof T-blocks.
+    // These blocks sit between the DS outer cryostat (y~1328 mm) and the CRV top
+    // sectors T1/T2 (y~2653 mm), and are the dominant passive material for
+    // tracker-to-CRV-top extrapolation.
+    //
+    // With orientations "010"/"012" (both map U->z, V->y, W->x):
+    //   U (±uhw_outer mm) -> ±z footprint of the wide crossbar per block
+    //   V range [vmin, vmax]  -> y; vshoulder separates crossbar from stem
+    //   W (length/2 = xhw mm) -> x (transverse, same for both components)
+    //
+    // The T cross-section is decomposed into two non-overlapping rectangles:
+    //   Crossbar: V in [vmin, vshoulder], U in [-uhw_outer, +uhw_outer]
+    //   Stem    : V in [vshoulder, vmax], U in [-uhw_inner, +uhw_inner]
+    // Each is modelled with two Gauss-point planes so tracks through the crossbar-
+    // only region (the ~2/3 of z-width outside the stem) correctly see half the
+    // concrete compared to tracks through the full T height.
+    int const nType2 = config_.getInt("ExtShieldDownstream.nBoxType2");
+    if(nType2 > 0) {
+      std::vector<double> uVerts, vVerts;
+      config_.getVectorDouble("ExtShieldDownstream.outlineType2UVerts", uVerts);
+      config_.getVectorDouble("ExtShieldDownstream.outlineType2VVerts", vVerts);
+      if(uVerts.empty() || vVerts.empty()) return;
+
+      auto const uExt = std::minmax_element(uVerts.begin(), uVerts.end());
+      auto const vExt = std::minmax_element(vVerts.begin(), vVerts.end());
+      double const xhw       = 0.5*config_.getDouble("ExtShieldDownstream.lengthType2");
+      auto const material    = config_.getString("ExtShieldDownstream.materialType2");
+
+      double const vmin_t    = *vExt.first;   // = -452.2 mm (bottom of crossbar)
+      double const vmax_t    = *vExt.second;  // = +452.2 mm (top of stem)
+      double const uhw_outer = *uExt.second;  // = 680.8 mm  (crossbar z half-width per block)
+
+      // Inner U half-width (stem): smallest positive U vertex that differs from uhw_outer
+      double uhw_inner = uhw_outer;
+      for(double u : uVerts)
+        if(u > 0 && u < uhw_outer - 1.0) uhw_inner = std::min(uhw_inner, u);
+
+      // Shoulder V (where T width steps inward): V value strictly between vmin and vmax
+      double vshoulder = 0.0;
+      for(double v : vVerts)
+        if(v > vmin_t + 1.0 && v < vmax_t - 1.0) { vshoulder = v; break; }
+
+      // Crossbar component: V in [vmin_t, vshoulder]
+      double const yhalf_cb     = 0.5*(vshoulder - vmin_t);   // = 223.6 mm
+      double const vcenter_cb   = 0.5*(vmin_t + vshoulder);   // = -228.6 mm (local V offset)
+
+      // Stem component: V in [vshoulder, vmax_t]
+      double const yhalf_stem   = 0.5*(vmax_t - vshoulder);   // = 228.6 mm
+      double const vcenter_stem = 0.5*(vshoulder + vmax_t);   // = +223.6 mm (local V offset)
+
+      // Accumulate x/y center (common to both components) and z bounding boxes
+      // (different per component because stem is narrower in z than crossbar).
+      double xcenter = 0.0, ycenter = 0.0;
+      double zmin_cb = 1.0e9, zmax_cb = -1.0e9;
+      double zmin_st = 1.0e9, zmax_st = -1.0e9;
+      int nfound = 0;
+      for(int ibox = 1; ibox <= nType2; ++ibox) {
+        std::string const key = "ExtShieldDownstream.centerType2Box" + std::to_string(ibox);
+        if(!config_.hasName(key)) continue;
+        std::vector<double> ctr;
+        config_.getVectorDouble(key, ctr);
+        xcenter += ctr[0];
+        ycenter += ctr[1];
+        zmin_cb = std::min(zmin_cb, ctr[2] - uhw_outer);
+        zmax_cb = std::max(zmax_cb, ctr[2] + uhw_outer);
+        zmin_st = std::min(zmin_st, ctr[2] - uhw_inner);
+        zmax_st = std::max(zmax_st, ctr[2] + uhw_inner);
+        ++nfound;
+      }
+      if(nfound == 0) return;
+      xcenter /= nfound;
+      ycenter /= nfound;
+
+      // Global Mu2e Y centers for each T component (ycenter = mean box center = 2006.1 mm)
+      double const ycenter_cb   = ycenter + vcenter_cb;    // ≈ 1777.5 mm
+      double const ycenter_stem = ycenter + vcenter_stem;  // ≈ 2229.7 mm
+
+      double const zcenters[2] = { 0.5*(zmin_cb + zmax_cb), 0.5*(zmin_st + zmax_st) };
+      double const zhws[2]     = { 0.5*(zmax_cb - zmin_cb), 0.5*(zmax_st - zmin_st) };
+      double const yctrs[2]    = { ycenter_cb,   ycenter_stem  };
+      double const yhalfs[2]   = { yhalf_cb,     yhalf_stem    };
+
+      // Four planes total: two Gauss-point planes for each T component.
+      for(int icomp = 0; icomp < 2; ++icomp) {
+        for(int iplane = 0; iplane < 2; ++iplane) {
+          double const ysign = iplane == 0 ? -1.0 : 1.0;
+          auto const center = VEC3(det->toDetector(
+              CLHEP::Hep3Vector(xcenter, yctrs[icomp] + ysign*yhalfs[icomp]*invSqrt3, zcenters[icomp])));
+          auto const plane = std::make_shared<Rectangle>(
+              VEC3(0.0,1.0,0.0), VEC3(1.0,0.0,0.0), center, xhw, zhws[icomp]);
+          SurfaceId sid(SurfaceIdEnum::DS_HatchConcrete,
+                        static_cast<int>(kkg_->passiveMaterialPlanes_.size()));
+          kkg_->passiveMaterialPlanes_.emplace_back(sid, plane, material, yhalfs[icomp]);
+          kkg_->map_.emplace(std::make_pair(sid, std::static_pointer_cast<Surface>(plane)));
+        }
+      }
     }
   }
 }

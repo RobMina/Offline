@@ -51,6 +51,12 @@ namespace mu2e {
       using KKCRVXING = KKShellXing<KTRAJ,KinKal::Rectangle>;
       using KKCRVXINGPTR = std::shared_ptr<KKCRVXING>;
       using KKCRVXINGCOL = std::vector<KKCRVXINGPTR>;
+      using KKMATCYLXING = KKShellXing<KTRAJ,KinKal::Cylinder>;
+      using KKMATCYLXINGPTR = std::shared_ptr<KKMATCYLXING>;
+      using KKMATCYLXINGCOL = std::vector<KKMATCYLXINGPTR>;
+      using KKMATRECXING = KKShellXing<KTRAJ,KinKal::Rectangle>;
+      using KKMATRECXINGPTR = std::shared_ptr<KKMATRECXING>;
+      using KKMATRECXINGCOL = std::vector<KKMATRECXINGPTR>;
       using KKINTER = std::tuple<SurfaceId,KinKal::Intersection>;
       using KKINTERCOL = std::vector<KKINTER>;
       using TRACK = KinKal::Track<KTRAJ>;
@@ -82,6 +88,8 @@ namespace mu2e {
         this->clone_pointer_collection(ipaxings_, rhs.IPAXings(), context);
         this->clone_pointer_collection(stxings_, rhs.STXings(), context);
         this->clone_pointer_collection(crvxings_, rhs.CRVXings(), context);
+        this->clone_pointer_collection(matcylxings_, rhs.materialCylXings(), context);
+        this->clone_pointer_collection(matrecxings_, rhs.materialPlaneXings(), context);
         this->clone_pointer_collection(strawhitclusters_, rhs.strawHitClusters(), context);
       }
 
@@ -121,6 +129,10 @@ namespace mu2e {
           KKSTRAWHITCOL const& strawhits, KKSTRAWXINGCOL const& strawxings, KKCALOHITCOL const& calohits );
       // extend the track to cover a new set of material Xings.  This will reuse the existing config object
       void extendTrack(EXINGCOL const& xings);
+      // add passive cylindrical material Xing
+      void addMaterialCylXing(KKMATCYLXINGPTR const& matxing,TimeDir const& tdir);
+      // add passive rectangular material Xing
+      void addMaterialPlaneXing(KKMATRECXINGPTR const& matxing,TimeDir const& tdir);
       // add IPA Xing
       void addIPAXing(KKIPAXINGPTR const& ipaxing,TimeDir const& tdir);
       // add ST Xing
@@ -138,6 +150,8 @@ namespace mu2e {
       KKIPAXINGCOL const& IPAXings() const { return ipaxings_; }
       KKSTXINGCOL const& STXings() const { return stxings_; }
       KKCRVXINGCOL const& CRVXings() const { return crvxings_; }
+      KKMATCYLXINGCOL const& materialCylXings() const { return matcylxings_; }
+      KKMATRECXINGCOL const& materialPlaneXings() const { return matrecxings_; }
       KKINTERCOL const& intersections() const { return inters_; }
       KKCALOHITCOL const& caloHits() const { return calohits_; }
       void printFit(std::ostream& ost=std::cout,int detail=0) const;
@@ -156,6 +170,8 @@ namespace mu2e {
       KKIPAXINGCOL ipaxings_;  // ipa material crossings used in extrapolation
       KKSTXINGCOL stxings_;  // stopping target material crossings used in extrapolation
       KKCRVXINGCOL crvxings_; // crv crossings using in extrapolation
+      KKMATCYLXINGCOL matcylxings_; // passive cylindrical material crossings used in extrapolation
+      KKMATRECXINGCOL matrecxings_; // passive rectangular material crossings used in extrapolation
       KKINTERCOL inters_; // other recorded intersections
       KKSTRAWHITCLUSTERCOL strawhitclusters_;  // straw hit clusters used in this fit
       // utility function to convert to generic types
@@ -308,6 +324,30 @@ namespace mu2e {
   template <class KTRAJ> void KKTrack<KTRAJ>::extendTrack( EXINGCOL const& exings) {
     MEASCOL nohits;
     this->extend(this->config(),nohits,exings);
+  }
+
+  template <class KTRAJ> void KKTrack<KTRAJ>::addMaterialCylXing(KKMATCYLXINGPTR const& matxingptr,TimeDir const& tdir) {
+    // convert to a generic Xing
+    std::shared_ptr<KinKal::ElementXing<KTRAJ>> exptr = std::static_pointer_cast<KinKal::ElementXing<KTRAJ>>(matxingptr);
+    // extrapolate the fit through this xing
+    if(!this->extrapolate(exptr,tdir))throw cet::exception("RECO")<<"mu2e::KKTrack: cylindrical material shell extrapolation failure"
+      << " sid " << matxingptr->surfaceId() << " time " << matxingptr->time()
+      << " normDot " << matxingptr->intersection().norm_.Dot(matxingptr->intersection().pdir_)
+      << " active " << matxingptr->active() << std::endl;
+    // store the xing
+    matcylxings_.push_back(matxingptr);
+  }
+
+  template <class KTRAJ> void KKTrack<KTRAJ>::addMaterialPlaneXing(KKMATRECXINGPTR const& matxingptr,TimeDir const& tdir) {
+    // convert to a generic Xing
+    std::shared_ptr<KinKal::ElementXing<KTRAJ>> exptr = std::static_pointer_cast<KinKal::ElementXing<KTRAJ>>(matxingptr);
+    // extrapolate the fit through this xing
+    if(!this->extrapolate(exptr,tdir))throw cet::exception("RECO")<<"mu2e::KKTrack: passive material plane extrapolation failure"
+      << " sid " << matxingptr->surfaceId() << " time " << matxingptr->time()
+      << " normDot " << matxingptr->intersection().norm_.Dot(matxingptr->intersection().pdir_)
+      << " active " << matxingptr->active() << std::endl;
+    // store the xing
+    matrecxings_.push_back(matxingptr);
   }
 
   template <class KTRAJ> void KKTrack<KTRAJ>::printFit(std::ostream& ost,int printlevel) const {

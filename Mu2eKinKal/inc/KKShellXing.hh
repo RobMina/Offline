@@ -9,6 +9,8 @@
 #include "KinKal/Geometry/ParticleTrajectoryIntersect.hh"
 #include "KinKal/MatEnv/DetMaterial.hh"
 #include "Offline/DataProducts/inc/SurfaceId.hh"
+#include <algorithm>
+#include <cmath>
 
 namespace mu2e {
   template <class KTRAJ,class SURF> class KKShellXing : public KinKal::ElementXing<KTRAJ> {
@@ -67,7 +69,8 @@ namespace mu2e {
   {
     if(inter_.good()){
       // compute the path length
-      double pathlen = thick_/(inter_.norm_.Dot(inter_.pdir_));
+      double dotprod = std::max(1e-6,std::fabs(inter_.norm_.Dot(inter_.pdir_)));
+      double pathlen = thick_/dotprod;
       mxings_.emplace_back(mat_,pathlen);
     }
   }
@@ -90,7 +93,8 @@ namespace mu2e {
     // check if we are on the surface; if so, create the xing
     if(inter_.good()){
       // compute the path length
-      double pathlen = thick_/(inter_.norm_.Dot(inter_.pdir_));
+      double dotprod = std::max(1e-6,std::fabs(inter_.norm_.Dot(inter_.pdir_)));
+      double pathlen = thick_/dotprod;
       mxings_.emplace_back(mat_,pathlen);
       fparams_ = this->parameterChange(varscale_);
     }
