@@ -47,7 +47,6 @@ namespace mu2e {
       template <class KTRAJ> void extrapolateCRV(KKTrack<KTRAJ>& ktrk,TimeDir tdir) const;
       template <class KTRAJ> void extrapolateOPA(KKTrack<KTRAJ>& ktrk, double tstart, TimeDir tdir) const;
       template <class KTRAJ> void toTrackerEnds(KKTrack<KTRAJ>& ktrk) const;
-        // TODO add DS and shielding material
 
     private:
       int debug_;
@@ -325,31 +324,6 @@ namespace mu2e {
     if(planes.empty()) return;
     auto extrapPlanes = ExtrapolatePlanes(maxdt_,maxdtstep_,btol_,intertol_,minv_,planes,debug_);
     auto const& ftraj = ktrk.fitTraj();
-
-    // debug_>=3: "no-fix" mode — no deduplication, capped at maxNoFixIter_ iterations.
-    // Used to measure loop-multiplicity without the unordered_set; compare to the fixed path.
-    if(debug_ >= 3) {
-      static constexpr int maxNoFixIter_ = 40;
-      int iter = 0;
-      std::map<MaterialPlane const*,int> planeCount;
-      do {
-        ktrk.extrapolate(tdir,extrapPlanes);
-        if(extrapPlanes.intersections().empty()) break;
-        auto const& inter = extrapPlanes.intersections().front();
-        auto const& plane = *inter.plane_;
-        planeCount[&plane]++;
-        auto const& reftrajptr = tdir == TimeDir::backwards ? ftraj.frontPtr() : ftraj.backPtr();
-        auto matxingptr = std::make_shared<KKMATRECXING>(plane.surface_,plane.sid_,*kkmat_h->material(plane.material_),
-            inter.inter_,reftrajptr,plane.thickness_,extrapPlanes.interTolerance());
-        ktrk.addMaterialPlaneXing(matxingptr,tdir);
-        ++iter;
-      } while(iter < maxNoFixIter_);
-      std::cout << "[nofix] passive plane iterations=" << iter
-                << " (cap=" << maxNoFixIter_ << ") planes_found=" << planes.size() << std::endl;
-      for(auto const& [ptr,cnt] : planeCount)
-        std::cout << "[nofix]   " << ptr->sid_.name() << " x" << cnt << std::endl;
-      return;
-    }
 
     // Normal path: process each plane at most once.
     // Stop before calling ktrk.extrapolate when all planes have been processed so
