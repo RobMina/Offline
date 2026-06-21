@@ -8,15 +8,23 @@
 #include "art/Framework/Principal/Handle.h"
 #include "cetlib_except/exception.h"
 #include "fhiclcpp/types/Atom.h"
+#include "fhiclcpp/types/Sequence.h"
+#include "fhiclcpp/types/OptionalAtom.h"
 #include "canvas/Utilities/InputTag.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "Offline/GlobalConstantsService/inc/ParticleData.hh"
 #include "Offline/DataProducts/inc/SurfaceId.hh"
 #include "Offline/MCDataProducts/inc/SurfaceStep.hh"
 #include "Offline/MCDataProducts/inc/StepPointMC.hh"
+#include "Offline/MCDataProducts/inc/CrvStep.hh"
+#include "Offline/CosmicRayShieldGeom/inc/CosmicRayShield.hh"
 #include "Offline/GeometryService/inc/DetectorSystem.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
-#include "Offline/GeometryService/inc/GeomHandle.hh"
+#include <cmath>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace mu2e {
 
@@ -31,15 +39,29 @@ namespace mu2e {
         fhicl::Atom<art::InputTag> ststepmcs { Name("TargetStepPointMCs"), Comment("Stopping target StepPointMC collection")};
         fhicl::Atom<double> maxdgap{ Name("MaxDistGap"), Comment("Maximum dstance gap between aggregated StepPointMCs")};
         fhicl::Atom<double> maxtgap{ Name("MaxTimeGap"), Comment("Maximum time gap between aggregated StepPointMCs")};
+        fhicl::Atom<double> maxseglen{ Name("MaxSegmentLength"),
+          Comment("Maximum path length (mm) per fixed-Sid SurfaceStep; thick volumes (e.g. concrete) are split into sub-segments so the in-volume trajectory (multiple-scattering) is resolved. Large default disables splitting; thin volumes are unaffected."), 1.0e9 };
+        fhicl::Sequence<art::InputTag> dsmatstepmcs { Name("DSMaterialStepPointMCs"),
+          Comment("Per-volume StepPointMC collections for DS passive materials + concrete (sensitiveVolumes); each maps to one fixed SurfaceId"), std::vector<art::InputTag>{} };
+        fhicl::Sequence<std::string> dsmatsids { Name("DSMaterialSurfaceIds"),
+          Comment("SurfaceId name for each DSMaterialStepPointMCs entry (parallel list, same length)"), std::vector<std::string>{} };
+        fhicl::OptionalAtom<art::InputTag> crvsteps { Name("CrvSteps"),
+          Comment("CrvStep collection; if set, produce one SurfaceStep per CRV sector crossing") };
       };
       using Parameters = art::EDProducer::Table<Config>;
       explicit MakeSurfaceSteps(const Parameters& conf);
     private:
       void produce(art::Event& e) override;
+      // aggregate adjacent same-SimParticle steps from one collection into SurfaceSteps with a fixed SurfaceId
+      void aggregateFixedSid(StepPointMCCollection const& col, SurfaceId const& sid,
+                             GeomHandle<DetectorSystem> const& det, SurfaceStepCollection& ssc) const;
       int debug_;
       double maxdgap_;
       double maxtgap_;
+      double maxseglen_;
       art::ProductToken<StepPointMCCollection> vdstepmcs_, absstepmcs_, ststepmcs_;
+      std::vector<std::pair<art::ProductToken<StepPointMCCollection>,SurfaceId>> dsmat_; // DS material/concrete collections -> SurfaceId
+      std::optional<art::ProductToken<CrvStepCollection>> crvsteps_;
       std::map<VirtualDetectorId,SurfaceId> vdmap_; // map of VDIds to surfaceIds
   };
 
@@ -48,11 +70,23 @@ namespace mu2e {
     debug_(config().debug()),
     maxdgap_(config().maxdgap()),
     maxtgap_(config().maxtgap()),
+    maxseglen_(config().maxseglen()),
     vdstepmcs_{ consumes<StepPointMCCollection>(config().vdstepmcs())},
     absstepmcs_{ consumes<StepPointMCCollection>(config().absstepmcs())},
     ststepmcs_{ consumes<StepPointMCCollection>(config().ststepmcs())}
     {
       produces <SurfaceStepCollection>();
+      // DS passive-material + concrete collections, each with a fixed SurfaceId (parallel lists)
+      auto const& dsmattags = config().dsmatstepmcs();
+      auto const& dsmatsids = config().dsmatsids();
+      if(dsmattags.size() != dsmatsids.size())
+        throw cet::exception("Configuration") << "MakeSurfaceSteps: DSMaterialStepPointMCs ("
+          << dsmattags.size() << ") and DSMaterialSurfaceIds (" << dsmatsids.size() << ") must have the same length" << std::endl;
+      for(size_t i=0; i<dsmattags.size(); ++i)
+        dsmat_.emplace_back(consumes<StepPointMCCollection>(dsmattags[i]), SurfaceId(dsmatsids[i]));
+      // optional CRV truth steps
+      art::InputTag crvtag;
+      if(config().crvsteps(crvtag)) crvsteps_ = consumes<CrvStepCollection>(crvtag);
       // build the VDId -> SId map by hand. This should come from a service TODO
       vdmap_[VirtualDetectorId(VirtualDetectorId::TT_FrontHollow)] = SurfaceId("TT_Front");
       vdmap_[VirtualDetectorId(VirtualDetectorId::TT_Mid)] = SurfaceId("TT_Mid");
@@ -163,8 +197,67 @@ namespace mu2e {
     if(ststep.surfaceId() != SurfaceIdDetail::unknown && ststep.simParticle().isNonnull())ssc->push_back(ststep);
     auto nststeps = ssc->size() - nabsorbersteps - nvdsteps;
     if(debug_ > 0)std::cout << "Added " << nststeps << " stopping target Steps "<< std::endl;
+    // DS passive materials + concrete: each collection corresponds to one volume -> one fixed SurfaceId.
+    // These come from G4 SDConfig.sensitiveVolumes (full position+momentum truth at the crossing /
+    // throughout the concrete). Aggregate adjacent same-SimParticle steps within each collection.
+    auto npre = ssc->size();
+    for(auto const& tagsid : dsmat_) {
+      auto const& col_h = event.getValidHandle<StepPointMCCollection>(tagsid.first);
+      aggregateFixedSid(*col_h, tagsid.second, det, *ssc);
+    }
+    if(debug_ > 0)std::cout << "Added " << (ssc->size()-npre) << " DS-material/concrete steps " << std::endl;
+    // CRV: build one SurfaceStep per (SimParticle, CRV sector) from CrvSteps, mapping the
+    // scintillator bar index to its sector's SurfaceId exactly as KinKalGeomMaker does.
+    if(crvsteps_) {
+      GeomHandle<CosmicRayShield> crs;
+      auto const& crvcol_h = event.getValidHandle<CrvStepCollection>(*crvsteps_);
+      auto const& crvcol = *crvcol_h;
+      auto ncrvpre = ssc->size();
+      SurfaceStep cur; int curshield = -1;
+      for(auto const& cs : crvcol) {
+        int shield = crs->getBar(cs.barIndex()).id().getShieldNumber();
+        auto pos = XYZVectorF(det->toDetector(cs.startPosition()));
+        bool added(false);
+        if(cur.simParticle().isNonnull() && cur.simParticle() == cs.simParticle() && shield == curshield
+           && cs.startTime() >= cur.time()
+           && std::fabs(cur.time()-cs.startTime()) < maxtgap_
+           && (cur.endPosition()-pos).R() < maxdgap_) {
+          cur.addStep(cs,det); added = true;
+        }
+        if(!added) {
+          if(cur.simParticle().isNonnull()) ssc->push_back(cur);
+          SurfaceId sid(crs->getCRSScintillatorShields().at(shield).getName());
+          cur = SurfaceStep(sid, cs, det);
+          curshield = shield;
+        }
+      }
+      if(cur.simParticle().isNonnull()) ssc->push_back(cur);
+      if(debug_ > 0)std::cout << "Added " << (ssc->size()-ncrvpre) << " CRV sector steps " << std::endl;
+    }
     // finish
     event.put(move(ssc));
+  }
+
+  void MakeSurfaceSteps::aggregateFixedSid(StepPointMCCollection const& col, SurfaceId const& sid,
+      GeomHandle<DetectorSystem> const& det, SurfaceStepCollection& ssc) const {
+    SurfaceStep cur;
+    for(auto const& spmc : col) {
+      auto pos = XYZVectorF(det->toDetector(spmc.position()));
+      bool added(false);
+      // aggregate only contiguous, time-ordered steps of the same SimParticle
+      if(cur.simParticle().isNonnull() && cur.simParticle() == spmc.simParticle()
+         && spmc.time() >= cur.time()
+         && std::fabs(cur.time()-spmc.time()) < maxtgap_
+         && (cur.endPosition()-pos).R() < maxdgap_
+         && cur.pathLength() < maxseglen_) {  // split long crossings (e.g. concrete) into sub-segments
+        cur.addStep(spmc,det); added = true;
+      }
+      if(!added) {
+        if(cur.simParticle().isNonnull()) ssc.push_back(cur);
+        cur = SurfaceStep(sid, spmc, det);
+      }
+    }
+    if(cur.simParticle().isNonnull()) ssc.push_back(cur);
   }
 
 }

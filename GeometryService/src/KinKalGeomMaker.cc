@@ -142,11 +142,31 @@ namespace mu2e {
     addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_CryoOuter),ds->rOut1(),ds->rOut2(),ds->position().z(),ds->halfLength(),ds->material());
     addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_ShieldInner),ds->shield_rIn1(),ds->shield_rIn2(),ds->position().z(),ds->shield_halfLength(),ds->shield_material());
     addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_ShieldOuter),ds->shield_rOut1(),ds->shield_rOut2(),ds->position().z(),ds->shield_halfLength(),ds->shield_material());
-    for(size_t icoil = 0; icoil < static_cast<size_t>(ds->nCoils()); icoil++){
-      auto material = ds->coilVersion() == 1 ? ds->coil_material() : ds->coil_materials().at(icoil);
-      double halflen = 0.5*ds->coil_zLength().at(icoil);
-      addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_Coil,static_cast<int>(icoil)),
-          ds->coil_rIn(),ds->coil_rOut().at(icoil),ds->coil_zPosition().at(icoil)+halflen,halflen,material);
+    // Coils: collapse the 11 short coil cylinders into ONE long cylinder spanning the coil z-range.
+    // The individual coils are too short in z to be reliably intersected by the extrapolation (truth
+    // crosses a coil on ~100% of DS tracks, but only ~1/3 were reco-registered); a single long cylinder
+    // is found in bounds like the shells. Geometry is averaged over z-coverage; the two coil mixes
+    // (DS1/DS2CoilMix) are combined into the effective DSCoilMix material -- a z-mass-weighted Al/NbTi
+    // blend whose density is scaled to the effective thickness so it reproduces the true z-averaged
+    // radiation length / areal mass (see TrackerConditions/data/MaterialsList.data). This mirrors how
+    // the CRV modules (CRVModule) and the downstream concrete are represented by one averaged material.
+    // NB: the DSCoilMix density assumes the effective thickness below; both follow the run-2 coil geometry.
+    {
+      size_t const ncoils = static_cast<size_t>(ds->nCoils());
+      double zmin = 1e9, zmax = -1e9, tsum = 0.0, rsum = 0.0, zlentot = 0.0;
+      for(size_t icoil = 0; icoil < ncoils; icoil++){
+        double const zlen = ds->coil_zLength().at(icoil);
+        double const z0   = ds->coil_zPosition().at(icoil);
+        double const rout = ds->coil_rOut().at(icoil);
+        zmin = std::min(zmin, z0); zmax = std::max(zmax, z0 + zlen);
+        tsum += zlen * (rout - ds->coil_rIn());          // z-weighted radial thickness
+        rsum += zlen * 0.5*(ds->coil_rIn() + rout);       // z-weighted mid radius
+        zlentot += zlen;
+      }
+      double const teff = tsum / zlentot;                 // effective radial thickness (~28.08 mm)
+      double const reff = rsum / zlentot;                 // effective mid radius
+      addMaterialCylinder(SurfaceId(SurfaceIdEnum::DS_Coil),
+          reff - 0.5*teff, reff + 0.5*teff, 0.5*(zmin + zmax), 0.5*(zmax - zmin), "DSCoilMix");
     }
 
 
@@ -286,6 +306,21 @@ namespace mu2e {
       sector.sname_ = shield.getName();
       sector.sector_ = std::make_shared<KinKal::Rectangle>(wdir,udir,midpoint,uhw,vhw);
       sector.whw_ = whw;
+      // Each CRV module carries a ~12.7 mm aluminium strongback (support plate) on the tracker-facing side
+      // of the scintillator stack (crs.strongBackThickness, G4_Al). The muon scatters and loses energy there
+      // on its way BETWEEN the CRV and the tracker, so the extrapolation must fold it in during the
+      // tracker->CRV propagation. The CRVModule material is otherwise lumped into the CRV-plane Xing, which
+      // is applied only AFTER the CRV momentum/covariance are recorded (the recorded state is pre-Xing) -- so
+      // the strongback would be absent from the recorded reco state while the G4-truth muon really scattered
+      // in it, a truth/reco mismatch. Model it as a thin Al passive plane just inside (tracker side, -wdir)
+      // the scintillator stack so ExtrapolatePlanes crosses it and applies its scatter+eloss BEFORE the CRV
+      // momentum is stored. (A single thin plane suffices: Var(position) over 12.7 mm is negligible.)
+      double const strongBackThickness = 12.7; // mm; crs.strongBackThickness (fixed mechanical spec, G4_Al)
+      auto const sbcenter = midpoint - (whw + 0.5*strongBackThickness)*wdir;
+      auto const sbplane  = std::make_shared<KinKal::Rectangle>(wdir,udir,sbcenter,uhw,vhw);
+      SurfaceId sbsid(SurfaceIdEnum::CRV_StrongBack, static_cast<int>(kkg_->passiveMaterialPlanes_.size()));
+      kkg_->passiveMaterialPlanes_.emplace_back(sbsid, sbplane, "G4_Al", 0.5*strongBackThickness);
+      kkg_->map_.emplace(std::make_pair(sbsid, std::static_pointer_cast<Surface>(sbplane)));
       sectors.push_back(sector);
     }
     // sort the sectors according to their transverse distance (largest first), to optimize searching for downward going tracks.
@@ -305,6 +340,46 @@ namespace mu2e {
     for(auto const& sector : kkg_->crv_->sectors()){
       kkg_->map_.emplace(std::make_pair(SurfaceId(sector.sname_),std::static_pointer_cast<Surface>(sector.sector_)));
       isect++;
+    }
+  }
+
+  // Append one averaged rectangular concrete passive-material plane for an ExtShield region.
+  // 'halfThickness' is the half material depth a track crosses along the normal
+  // (used for the energy-loss/scattering path length). All planes use the broad
+  // DS_HatchConcrete SurfaceId; a running index distinguishes the individual planes.
+  void KinKalGeomMaker::addConcretePlane(DetectorSystem const& det,
+      int normalAxis, CLHEP::Hep3Vector const& centerMu2e,
+      double hw1, double hw2, double halfThickness, std::string const& material) {
+    // Build the plane's local frame. The Rectangle ctor takes (normal,udir,center,
+    // uHalfLen,vHalfLen) with vdir = normal x udir (right-handed). We pick udir/vdir
+    // as the two global axes orthogonal to the normal so the half-extents map cleanly.
+    VEC3 norm, udir;
+    double uhw, vhw;
+    switch(normalAxis) {
+      case 0: // x-normal (side walls): u=y, v=z
+        norm = VEC3(1.0,0.0,0.0); udir = VEC3(0.0,1.0,0.0); uhw = hw1; vhw = hw2; break;
+      case 1: // y-normal (roof): u=x, v=z (matches the Type-2 roof convention below)
+        norm = VEC3(0.0,1.0,0.0); udir = VEC3(1.0,0.0,0.0); uhw = hw1; vhw = hw2; break;
+      case 2: // z-normal (downstream endcap): u=x, v=y
+        norm = VEC3(0.0,0.0,1.0); udir = VEC3(1.0,0.0,0.0); uhw = hw1; vhw = hw2; break;
+      default:
+        throw cet::exception("Service") << "invalid concrete-plane normal axis " << normalAxis << std::endl;
+    }
+    // Split the crossing into TWO Gauss-point planes along the normal, at center +/- halfThickness/(2*sqrt3),
+    // each carrying HALF the material. This integrates the bulk multiple scattering with a 2-point Gauss
+    // rule (exact for a uniform slab: reproduces the continuous angle-position covariance) while preserving
+    // the total crossed material, so energy loss is unchanged. Mirrors the Type-2 roof treatment; a single
+    // thin plane gets Var(angle) and the angle-position correlation right but Var(position) ~25% low.
+    double const invSqrt3 = 1.0/std::sqrt(3.0);
+    auto const center0 = VEC3(det.toDetector(centerMu2e));
+    for(int iplane = 0; iplane < 2; ++iplane) {
+      double const sign = iplane == 0 ? -1.0 : 1.0;
+      auto const center = center0 + (sign*0.5*halfThickness*invSqrt3)*norm;
+      auto const plane = std::make_shared<Rectangle>(norm, udir, center, uhw, vhw);
+      SurfaceId sid(SurfaceIdEnum::DS_HatchConcrete,
+                    static_cast<int>(kkg_->passiveMaterialPlanes_.size()));
+      kkg_->passiveMaterialPlanes_.emplace_back(sid, plane, material, 0.5*halfThickness);
+      kkg_->map_.emplace(std::make_pair(sid, std::static_pointer_cast<Surface>(plane)));
     }
   }
 
@@ -407,6 +482,123 @@ namespace mu2e {
           kkg_->map_.emplace(std::make_pair(sid, std::static_pointer_cast<Surface>(plane)));
         }
       }
+    }
+
+    // Collapse all type-<boxType> ExtShieldDownstream concrete boxes of a region into one
+    // averaged plane. 'normalAxis' is the slab normal (0=x,1=y,2=z); the in-plane
+    // half-extents are (center span)/2 + the block half-size along each in-plane
+    // axis; 'halfThickness' is supplied by the caller (block depth along normal).
+    // Boxes whose center lies far from the region cluster (different sub-region,
+    // e.g. the type-1 north vs south wall) are separated by an explicit center cut.
+    auto buildAveragedRegion = [this,&det](int boxType, int normalAxis,
+        double halfU_block, double halfV_block, double halfThickness,
+        std::function<bool(std::vector<double> const&)> select) {
+      std::string const nkey = "ExtShieldDownstream.nBoxType" + std::to_string(boxType);
+      if(!config_.hasName(nkey)) return;
+      int const nbox = config_.getInt(nkey);
+      if(nbox <= 0) return;
+      std::string const matkey = "ExtShieldDownstream.materialType" + std::to_string(boxType);
+      auto const material = config_.getString(matkey);
+      // axis indices orthogonal to the normal, in increasing order
+      int a1 = (normalAxis == 0) ? 1 : 0;
+      int a2 = (normalAxis == 2) ? 1 : 2;
+      double nsum = 0.0;              // accumulate the normal-axis center (slab position)
+      double min1 = 1e9, max1 = -1e9; // in-plane axis 1 center range
+      double min2 = 1e9, max2 = -1e9; // in-plane axis 2 center range
+      int nfound = 0;
+      for(int ibox = 1; ibox <= nbox; ++ibox) {
+        std::string const key = "ExtShieldDownstream.centerType" + std::to_string(boxType)
+                                + "Box" + std::to_string(ibox);
+        if(!config_.hasName(key)) continue;
+        std::vector<double> ctr;
+        config_.getVectorDouble(key, ctr);
+        if(ctr.size() < 3) continue;
+        if(select && !select(ctr)) continue;
+        nsum += ctr[normalAxis];
+        min1 = std::min(min1, ctr[a1]); max1 = std::max(max1, ctr[a1]);
+        min2 = std::min(min2, ctr[a2]); max2 = std::max(max2, ctr[a2]);
+        ++nfound;
+      }
+      if(nfound == 0) return;
+      // assemble the center from the per-axis values (normal axis = mean slab
+      // position; in-plane axes = midpoint of the center bounding box)
+      double cc[3] = {0.0,0.0,0.0};
+      cc[normalAxis] = nsum / nfound;
+      cc[a1] = 0.5*(min1 + max1);
+      cc[a2] = 0.5*(min2 + max2);
+      CLHEP::Hep3Vector center(cc[0],cc[1],cc[2]);
+      double const hw1 = 0.5*(max1 - min1) + halfU_block;
+      double const hw2 = 0.5*(max2 - min2) + halfV_block;
+      this->addConcretePlane(*det, normalAxis, center, hw1, hw2, halfThickness, material);
+    };
+
+    // --- Side walls (the dominant omission). Type 1 regular-concrete wall T-blocks.
+    // Empirically from ExtShieldDownstream_v06.txt: the 904.4 mm V outline tiles
+    // along z (~914 mm center spacing), the 3851 mm length is the vertical (y)
+    // extent, and the 1361.6 mm U crossbar is the wall thickness (x, the slab
+    // normal). Box centers split into the north wall (x ~ -1897) and the south
+    // wall (x ~ -5911), each emitted as one x-normal slab.
+    // Averaged x half-thickness over the T cross-section (crossbar 1361.6 mm over
+    // ~49% of z, stem 447.2 mm over ~51%) ~= 899 mm -> half ~= 449.5 mm; using
+    // this keeps the mean crossed concrete (energy loss) correct without 4 Gauss
+    // planes per wall. Half-extents: y from length/2, z from the block V half (452.2).
+    {
+      double const lenType1   = config_.hasName("ExtShieldDownstream.lengthType1") ?
+                                config_.getDouble("ExtShieldDownstream.lengthType1") : 3851.0;
+      double const yHalfBlock = 0.5*lenType1;        // vertical half-height per block (~1925.5)
+      double const zHalfBlock = 452.2;               // half V outline -> z footprint per block
+      double const xHalfThick = 449.5;               // averaged T x half-thickness (see note)
+      // north wall: x > -3904 (DS axis); south wall: x < -3904
+      buildAveragedRegion(1, 0, yHalfBlock, zHalfBlock, xHalfThick,
+          [](std::vector<double> const& c){ return c[0] > -3904.0; }); // north
+      buildAveragedRegion(1, 0, yHalfBlock, zHalfBlock, xHalfThick,
+          [](std::vector<double> const& c){ return c[0] < -3904.0; }); // south
+    }
+
+    // --- Other roof concrete types (same y-normal plane family as Type-2). These
+    // sit at y ~ 2006 between the DS and the top CRV but were not modelled. We add
+    // them as averaged y-normal slabs using the roof T half-height (the V outline
+    // ~452.2 mm maps to the vertical thickness for the roof). Types: 4 (barite roof
+    // T, 6 boxes), 9 (barite roof L, 2), 10 (concrete roof filler, 1), 23 (barite
+    // roof T around ST, 2), 29 (endcap top-back, 1), 30 (endcap top-front, 1).
+    // For these the wide U crossbar (680.8) and the W length (4918 for the long
+    // roof types) span x and z; we use the conservative full-width block half-sizes
+    // so the averaged footprint covers the tiled blocks. y half-thickness = 452.2.
+    {
+      double const roofYhalfThick = 452.2;   // V outline half -> roof vertical depth
+      double const roofXhalfBlock  = 0.5*4918.0; // roof block length/2 spans x (~2459)
+      double const roofZhalfBlock  = 680.8;      // U crossbar half spans z per block
+      // type 4: barite roof T blocks (upstream)
+      buildAveragedRegion(4, 1, roofXhalfBlock, roofZhalfBlock, roofYhalfThick, nullptr);
+      // type 23: barite roof T blocks around the stopping target
+      buildAveragedRegion(23, 1, roofXhalfBlock, roofZhalfBlock, roofYhalfThick, nullptr);
+      // type 9: barite roof L blocks on the ends of the upstream roof
+      buildAveragedRegion(9, 1, roofXhalfBlock, roofZhalfBlock, roofYhalfThick, nullptr);
+      // type 10: concrete roof filler block
+      buildAveragedRegion(10, 1, roofXhalfBlock, roofZhalfBlock, roofYhalfThick, nullptr);
+      // types 29/30: new-endcap top back / front roof pieces. y-normal slabs; the
+      // wide U outline (+/-2458.8) spans x, the short 913.9 mm length spans z.
+      buildAveragedRegion(29, 1, 2458.8, 0.5*913.9, roofYhalfThick, nullptr);
+      buildAveragedRegion(30, 1, 2458.8, 0.5*913.9, roofYhalfThick, nullptr);
+    }
+
+    // --- Downstream endcap concrete (z-normal). Types 27 (3 boxes) and 28 (1 box)
+    // form the wall closing the DS<->CRV gap at z ~ 18542, beyond the DS, at the
+    // CRV-D sectors. They have large x/y outlines (U up to 2463.8, V up to 3246.2,
+    // the V outline runs 0..3246.2 so the per-block V half-extent is ~1623 mm) and
+    // a short z length (~1117 / ~907 mm), i.e. a slab normal to z. We emit one
+    // averaged z-normal plane per type, with x half from the U outline, y half from
+    // the centers' bounding box plus the block V half, and z half-thickness from
+    // length/2. NOTE: the asymmetric (0-based) V outline means the precise y
+    // placement of the face would need the per-box "300" rotation to be decoded;
+    // here we cover the whole stacked x-y face conservatively, which is adequate for
+    // the broad energy-loss correction this region needs for CRV-D-bound tracks.
+    {
+      double const ecYhalfBlock = 0.5*3246.2; // V outline span -> per-block y half (~1623)
+      // type 27: 3 stacked endcap blocks (cover most of the x-y face)
+      buildAveragedRegion(27, 2, 2463.8, ecYhalfBlock, 0.5*1116.85, nullptr);
+      // type 28: endcap bottom block
+      buildAveragedRegion(28, 2, 2463.8, ecYhalfBlock, 0.5*906.77, nullptr);
     }
   }
 }

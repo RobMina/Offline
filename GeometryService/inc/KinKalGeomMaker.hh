@@ -6,8 +6,11 @@
 //
 #include "Offline/KinKalGeom/inc/KinKalGeom.hh"
 #include "Offline/KinKalGeom/inc/KKMaterial.hh"
+#include "CLHEP/Vector/ThreeVector.h"
+#include <string>
 namespace mu2e {
   class SimpleConfig;
+  class DetectorSystem;
   class KinKalGeomMaker {
     public:
       KinKalGeomMaker(SimpleConfig const& config, int debug) : config_(config), debug_(debug) {}
@@ -18,6 +21,10 @@ namespace mu2e {
       void makeTarget();
       void makeCRV();
       void makePassiveMaterials();
+      // append one averaged rectangular concrete passive-material plane (see .cc)
+      void addConcretePlane(DetectorSystem const& det, int normalAxis,
+          CLHEP::Hep3Vector const& centerMu2e, double hw1, double hw2,
+          double halfThickness, std::string const& material);
       SimpleConfig const& config_;
       std::unique_ptr<KinKalGeom> kkg_;
       int debug_ = 0;

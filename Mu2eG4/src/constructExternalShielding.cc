@@ -42,6 +42,7 @@
 
 #include "Geant4/G4SubtractionSolid.hh"
 #include "Geant4/G4LogicalVolume.hh"
+#include "Geant4/G4UserLimits.hh"
 
 #include <vector>
 #include <sstream>
@@ -147,6 +148,14 @@ namespace mu2e {
     std::vector<std::vector<double> > notchDimDS = extshldDn->getNotchDimensions();
 
     nBox = outlDS.size();
+
+    // Optional fine G4 stepping in the downstream concrete: with a max-step UserLimit the muon takes
+    // ~maxStepLength steps through a slab, so the DSConcrete SurfaceStep truth finely samples the
+    // in-volume multiple-scattering trajectory (needed to validate the reco bulk-scattering model).
+    // Default -1 = no limit (production unaffected); validation geometry sets e.g. 5 mm. One shared
+    // limit object applied to every downstream box.
+    const double extShDnMaxStep = config.getDouble("ExtShieldDownstream.maxStepLength", -1.0);
+    G4UserLimits* extShDnStepLimit = (extShDnMaxStep > 0.0) ? new G4UserLimits(extShDnMaxStep) : nullptr;
 
     for(int i = 0; i < nBox; i++)
       {
@@ -406,6 +415,7 @@ namespace mu2e {
                         forceAuxEdgeVisible,
                         placePV,
                         doSurfaceCheck);
+          if (extShDnStepLimit) extShieldVol.logical->SetUserLimits(extShDnStepLimit);
         } else {
 
           // Build each normal box here.  Normal means no holes or notches.
@@ -433,6 +443,7 @@ namespace mu2e {
                         forceAuxEdgeVisible,
                         placePV,
                         doSurfaceCheck);
+          if (extShDnStepLimit) extShieldVol.logical->SetUserLimits(extShDnStepLimit);
 
         } // end of if...else...
 

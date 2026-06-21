@@ -33,11 +33,12 @@ namespace mu2e {
         CRV_U =240,                                           // CRV-Upstream
         CRV_D1=250, CRV_D2, CRV_D3, CRV_D4,                   // CRV-Downstream
         CRV_C1=260, CRV_C2,                                   // CRV-Cryo-Outer
+        CRV_StrongBack=270,                                   // CRV module Al strongback (tracker-side support plate)
         DS_HatchConcrete=300                                  // detector-area hatch concrete block approximation
       };
 
     // Update this counter whenever you add/remove surface IDs from the enum above.
-    static constexpr std::size_t nSurfaceIds = 53;
+    static constexpr std::size_t nSurfaceIds = 54;
 
     static std::string const& typeName();
     static std::map<enum_type,std::string> const& names();

@@ -1144,6 +1144,28 @@ namespace mu2e {
     }//if protonabsorber
 
 
+    /************************** DSConcrete (downstream concrete shielding) **************************/
+    // A dedicated SD recording StepPointMCs in the ExtShieldDownstream concrete boxes (the
+    // DS<->CRV-gap concrete). Unlike the per-volume SDConfig.sensitiveVolumes mechanism this
+    // makes ONE collection ("DSConcrete"), so it can be enabled in BOTH cosmic stages and mixed
+    // S1->S2: the muon crosses the ROOF concrete in S1, before the resampling boundary, so an
+    // S2-only sensitive detector misses it (see MakeSurfaceSteps). Every box is concrete, so all
+    // its steps map to the single SurfaceId DS_HatchConcrete -- no position decode needed. The DS
+    // cryostat/shield/coil shells are recorded separately (S2-only) via SDConfig.sensitiveVolumes.
+    if(sdHelper_->enabled(StepInstanceName::DSConcrete)) {
+      Mu2eG4SensitiveDetector* dsConcreteSD =
+        new Mu2eG4SensitiveDetector( SensitiveDetectorName::DSConcrete(), _config );
+      SDman->AddNewDetector(dsConcreteSD);
+
+      for(G4LogicalVolumeStore::iterator pos=store->begin(); pos!=store->end(); pos++){
+        G4String LVname = (*pos)->GetName();
+        if (LVname.find("ExtShieldDownstreamBox_") != std::string::npos) {
+          (*pos)->SetSensitiveDetector(dsConcreteSD);
+        }
+      }//for
+    }//if DSConcrete
+
+
     /************************** PSVacuum **************************/
     //done
     if(sdHelper_->enabled(StepInstanceName::PSVacuum)) {

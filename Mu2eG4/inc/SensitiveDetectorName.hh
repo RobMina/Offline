@@ -122,6 +122,10 @@ namespace mu2e {
       return StepInstanceName::name(StepInstanceName::PTM).c_str();
     }
 
+    static char const * DSConcrete() {
+      return StepInstanceName::name(StepInstanceName::DSConcrete).c_str();
+    }
+
   };
 
 } // namespace mu2e

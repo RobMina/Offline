@@ -50,7 +50,7 @@ namespace mu2e {
 
     private:
       int debug_;
-      double btol_, intertol_, maxdt_, maxdtstep_, minv_;
+      double btol_, intertol_, maxdt_, maxdtstep_, minv_, minvlong_;
       bool backToTracker_, extrapolateOPA_, toTrackerEnds_, upstream_, toCRV_;
       double ipathick_ = 0.511; // ipa thickness: should come from geometry service TODO
       double stthick_ = 0.1056; // st foil thickness: should come from geometry service TODO
@@ -63,6 +63,7 @@ namespace mu2e {
     maxdt_(extrapconfig.MaxDt()),
     maxdtstep_(extrapconfig.MaxDtStep()),
     minv_(extrapconfig.MinV()),
+    minvlong_(extrapconfig.MinVLong()),
     backToTracker_(extrapconfig.BackToTracker()),
     extrapolateOPA_(extrapconfig.ToOPA()),
     toTrackerEnds_(extrapconfig.ToTrackerEnds()),
@@ -301,17 +302,32 @@ namespace mu2e {
     if(cylinders.empty()) return;
     auto extrapCylinders = ExtrapolateCylinders(maxdt_,maxdtstep_,btol_,intertol_,minv_,cylinders,debug_);
     auto const& ftraj = ktrk.fitTraj();
+    using MaterialCylinder = ExtrapolateCylinders::MaterialCylinder;
+    std::unordered_set<MaterialCylinder const*> banked; // bank each cylinder once (avoid re-found duplicates)
     do {
       ktrk.extrapolate(tdir,extrapCylinders);
       if(debug_ > 0) std::cout << "Found " << extrapCylinders.intersections().size() << " DS material intersections " << std::endl;
-      if(!extrapCylinders.intersections().empty()) {
-        auto const& inter = extrapCylinders.intersections().front();
+      // Bank every crossing found in this pass, in strict tracker-inward time order (descending time
+      // for backward, ascending for forward). The DS material shells are concentric and closely spaced,
+      // so a single extrapolation step overshoots the whole cluster and the trajectory piece spans all
+      // of them; adding the crossings in this order makes each prepend/append shrink the piece down to
+      // exactly the next crossing, so every one stays within the addable front/back range and none is
+      // stranded as interior. (intersections() is not reliably time-sorted, so sort a local copy.) The
+      // 'banked' set skips a crossing re-found on a later step; once a pass adds nothing new, we are done.
+      auto inters = extrapCylinders.intersections();
+      std::sort(inters.begin(),inters.end(),[tdir](auto const& a,auto const& b){
+        return tdir == TimeDir::forwards ? a.inter_.time_ < b.inter_.time_ : a.inter_.time_ > b.inter_.time_; });
+      bool newbank = false;
+      for(auto const& inter : inters) {
+        if(!banked.insert(inter.cylinder_).second) continue;
+        newbank = true;
         auto const& cylinder = *inter.cylinder_;
         auto const& reftrajptr = tdir == TimeDir::backwards ? ftraj.frontPtr() : ftraj.backPtr();
         auto matxingptr = std::make_shared<KKMATCYLXING>(cylinder.surface_,cylinder.sid_,*kkmat_h->material(cylinder.material_),
             inter.inter_,reftrajptr,cylinder.thickness_,extrapCylinders.interTolerance());
         ktrk.addMaterialCylXing(matxingptr,tdir);
       }
+      if(!newbank) break;
     } while(extrapCylinders.intersections().size()>0);
   }
 
@@ -356,7 +372,7 @@ namespace mu2e {
     GeomHandle<mu2e::KinKalGeom> kkg_h;
     GeomHandle<mu2e::KKMaterial> kkmat_h;
     // extrapolate to the extracted CRV. Loop to cover multiple intersections
-    auto extrapCRV = ExtrapolateCRV(maxdt_,maxdtstep_,btol_,intertol_,minv_,*kkg_h->CRV(),debug_);
+    auto extrapCRV = ExtrapolateCRV(maxdt_,maxdtstep_,btol_,intertol_,minv_,minvlong_,*kkg_h->CRV(),debug_);
     if(debug_ > 5){std::cout << "Extrapolating to CRV with " << extrapCRV.sectors().size() << " sectors" << std::endl;
       for(auto const& sector : kkg_h->CRV()->sectors()) {
         std::cout << sector.sname_ << " position " << sector.sector_->center() << " halfwidth " << sector.whw_ << std::endl;

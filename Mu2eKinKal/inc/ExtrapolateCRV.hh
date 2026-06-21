@@ -38,8 +38,17 @@ namespace mu2e {
         sortIntersections(TimeDir tdir) : tdir_(tdir) {}
       };
 
-      ExtrapolateCRV(double maxdt, double maxdtstep, double dptol, double intertol, double minv, CRV const& crv, int debug=0) :
-        maxDt_(maxdt), maxDtStep_(maxdtstep), dptol_(dptol), intertol_(intertol), minvnorm_(minv), debug_(debug), sectors_(crv.sectors()) {}
+      ExtrapolateCRV(double maxdt, double maxdtstep, double dptol, double intertol, double minv, double minvlong, CRV const& crv, int debug=0) :
+        maxDt_(maxdt), maxDtStep_(maxdtstep), dptol_(dptol), intertol_(intertol), minvnorm_(minv), minvlong_(minvlong), debug_(debug), sectors_(crv.sectors()) {
+        // Per-plane grazing floor. End-cap planes whose normal lies along the DS axis (z) are crossed
+        // head-on only by genuine beam-axis muons; soft transverse cosmics merely graze them, producing
+        // fake upstream/downstream crossings. Require a higher normal velocity (minvlong) for these
+        // z-normal planes, while the top/side planes (x/y-normal), which legitimately see oblique
+        // cosmics, keep the looser minv.
+        sectorminv_.reserve(sectors_.size());
+        for(auto const& sector : sectors_)
+          sectorminv_.push_back( fabs(sector.sector_->normal().Z()) > 0.9 ? minvlong_ : minvnorm_ );
+      }
       // interface for extrapolation
       double maxDt() const { return maxDt_; }
       double maxDtStep() const { return maxDtStep_; }
@@ -58,9 +67,11 @@ namespace mu2e {
       double maxDtStep_ = -1; // maximum extrapolation time step in a single iteration
       double dptol_ = 1e10; // fractional momentum tolerance
       double intertol_ = 1e10; // intersection tolerance (mm)
-      double minvnorm_ = 1e-5; // minimum vel normal (outwards) to plane
+      double minvnorm_ = 1e-5; // minimum vel normal (outwards) to plane (top/side planes)
+      double minvlong_ = 1e-5; // minimum vel normal to z-normal end-cap planes (U/D/E)
       int debug_ = 0; // debug level
       CRVSV sectors_; // sectors cache
+      std::vector<double> sectorminv_; // per-sector minimum normal velocity (minvnorm_ or minvlong_ by orientation)
       mutable CRVIV inters_; // cache of most recent intersections
   };
 
@@ -96,8 +107,8 @@ namespace mu2e {
       double signed_perp = (sector.sector_->center()-pos).Dot(sector.sector_->normal());
       double time_to_sector = signed_perp / normvel; // extrap-time to reach the plane; <0 = plane behind
       if(debug_ > 4)std::cout << "CRV extrap normvel " << normvel << " time_to_sector " << time_to_sector << " signed_perp " << signed_perp << std::endl;
-      // skip if grazing the plane, or the plane is behind the current extrapolation point
-      if(fabs(normvel) < minvnorm_ || time_to_sector < 0 )continue;
+      // skip if grazing the plane (per-plane floor: stricter for z-normal end-caps), or the plane is behind
+      if(fabs(normvel) < sectorminv_[isect] || time_to_sector < 0 )continue;
       // try to intersect
       auto newinter = KinKal::intersect(fittraj,*sector.sector_,trange,intertol_,tdir);
       if(debug_ > 3)std::cout << "CRV " << newinter  << std::endl;

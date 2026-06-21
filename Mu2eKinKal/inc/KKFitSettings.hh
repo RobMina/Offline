@@ -117,6 +117,7 @@ namespace mu2e {
       fhicl::Atom<float> MaxDt { Name("MaxDt"), Comment("Maximum time to extrapolate a fit (ns)") };
       fhicl::Atom<float> MaxDtStep { Name("MaxDtStep"), Comment("Maximum time step when extrapolating a fit (ns)") };
       fhicl::Atom<float> MinV { Name("MinV"), Comment("Minimum velocity perp to the surface extrapolate a straight track fit") };
+      fhicl::Atom<float> MinVLong { Name("MinVLong"), Comment("Minimum velocity perp to a CRV end-cap (axis-normal, i.e. z-normal) plane (mm/ns). Higher than MinV: these planes are crossed head-on only by genuine beam-axis muons; soft transverse cosmics merely graze them, so a near-normal-incidence requirement suppresses the grazing fakes. Tuned on 1e5 cosmics (cos=MinVLong/c): 265 removes ~46%/19% of CRV_D/U grazing fakes while keeping >=97% of real head-on crossers -- the knee before real-crosser loss accelerates."), 265.0f };
       fhicl::Atom<bool> BackToTracker { Name("BackToTracker"), Comment("Extrapolate reflecting tracks back to the tracker") };
       fhicl::Atom<bool> ToTrackerEnds { Name("ToTrackerEnds"), Comment("Extrapolate tracks to the tracker ends") };
       fhicl::Atom<bool> Upstream { Name("Upstream"), Comment("Extrapolate tracks upstream") };
