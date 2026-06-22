@@ -13,6 +13,36 @@
 #include <cmath>
 
 namespace mu2e {
+  // Ratio of the unrestricted Bethe ionization MEAN to KinKal's energyLoss (the restricted/moyal loss), >=1.
+  // KinKal's moyalmean tracks the restricted (locally deposited) loss, whose dE/dx saturates at the Fermi
+  // plateau; the muon, however, loses the full *unrestricted* mean, which keeps rising (the relativistic rise
+  // the energetic delta-rays carry off). For thick extrapolation materials this under-counts the |p| the
+  // particle actually loses by ~7% (1 GeV) -> ~20% (>10 GeV), verified against MC truth (and shown 1:1 with
+  // the CRV momentum residual). Since the extrapolation applies eloss via ElementXing::momentumChange ->
+  // matXings (eloss and scattering coupled through the MaterialXing path), we correct by SCALING the crossing
+  // path by this factor: energyLoss(path*f) ~= f*energyLoss = the unrestricted mean (to ~0.6%, the log term).
+  // The mean is rebuilt with the SAME xi = eloss_xi (so units/scale match energyLoss), swapping the Landau-MPV
+  // bracket for the Bethe-mean bracket, using the material's own eexc()/densityCorrection(). Side-effect: the
+  // multiple-scattering variance scales by f too (~3-8% larger pointing sigma at high p), which does not touch
+  // the |p| residual. f>=1 always (we never reduce the loss).
+  inline double betheCorrectionFactor(MatEnv::DetMaterial const& mat, double mom, double pathlen, double mass) {
+    if(mom <= 0.0 || pathlen == 0.0) return 1.0;
+    static constexpr double me = 0.510998950;               // electron mass [MeV]
+    double const beta2 = mom*mom/(mom*mom + mass*mass);
+    double const bg2   = (mom*mom)/(mass*mass);             // (beta*gamma)^2
+    double const gamma = std::sqrt(mom*mom + mass*mass)/mass;
+    double const xi    = mat.eloss_xi(std::sqrt(beta2), pathlen); // (K/2)(Z/A)*rho*|path|/beta^2  [MeV]
+    double const I     = mat.eexc();                        // mean excitation energy [MeV]
+    double const Tmax  = 2.0*me*bg2/(1.0 + 2.0*gamma*me/mass + (me/mass)*(me/mass));
+    double const delta = mat.densityCorrection(bg2);        // same density-effect KinKal uses
+    // unrestricted Bethe MEAN loss, as a NEGATIVE energy change (DetMaterial::energyLoss is negative for loss)
+    double const meanChange = -xi*( std::log(2.0*me*bg2/I) + std::log(Tmax/I) - 2.0*beta2 - delta );
+    double const el = mat.energyLoss(mom, pathlen, mass);   // moyalmean, negative
+    if(el >= 0.0) return 1.0;
+    double const f = meanChange/el;                         // |mean|/|moyal|, both negative -> positive
+    return f > 1.0 ? f : 1.0;                               // only ever increase the loss
+  }
+
   template <class KTRAJ,class SURF> class KKShellXing : public KinKal::ElementXing<KTRAJ> {
     public:
       using PTRAJ = KinKal::ParticleTrajectory<KTRAJ>;
@@ -71,7 +101,11 @@ namespace mu2e {
       // compute the path length
       double dotprod = std::max(1e-6,std::fabs(inter_.norm_.Dot(inter_.pdir_)));
       double pathlen = thick_/dotprod;
-      mxings_.emplace_back(mat_,pathlen);
+      // Scale the crossed path so the (restricted/moyal) loss becomes the unrestricted Bethe mean the particle
+      // actually loses. This is the only seam: the post-fit extrapolation applies eloss via momentumChange ->
+      // matXings(), which reads exactly this mxings_ path (updateState/params is not used there).
+      double const f = betheCorrectionFactor(mat_, reftrajptr_->momentum(), pathlen, reftrajptr_->mass());
+      mxings_.emplace_back(mat_, pathlen*f);
     }
   }
 
@@ -95,7 +129,9 @@ namespace mu2e {
       // compute the path length
       double dotprod = std::max(1e-6,std::fabs(inter_.norm_.Dot(inter_.pdir_)));
       double pathlen = thick_/dotprod;
-      mxings_.emplace_back(mat_,pathlen);
+      // same Bethe-mean path scale as the ctor (keeps the fit-side params consistent with the extrapolation)
+      double const f = betheCorrectionFactor(mat_, reftrajptr_->momentum(), pathlen, reftrajptr_->mass());
+      mxings_.emplace_back(mat_, pathlen*f);
       fparams_ = this->parameterChange(varscale_);
     }
   }
