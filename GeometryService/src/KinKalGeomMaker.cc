@@ -315,11 +315,12 @@ namespace mu2e {
       // in it, a truth/reco mismatch. Model it as a thin Al passive plane just inside (tracker side, -wdir)
       // the scintillator stack so ExtrapolatePlanes crosses it and applies its scatter+eloss BEFORE the CRV
       // momentum is stored. (A single thin plane suffices: Var(position) over 12.7 mm is negligible.)
-      double const strongBackThickness = 12.7; // mm; crs.strongBackThickness (fixed mechanical spec, G4_Al)
+      double const strongBackThickness     = config_.getDouble("crs.strongBackThickness");        // mm
+      std::string const strongBackMaterial = config_.getString("crs.aluminumSheetMaterialName");  // G4_Al
       auto const sbcenter = midpoint - (whw + 0.5*strongBackThickness)*wdir;
       auto const sbplane  = std::make_shared<KinKal::Rectangle>(wdir,udir,sbcenter,uhw,vhw);
       SurfaceId sbsid(SurfaceIdEnum::CRV_StrongBack, static_cast<int>(kkg_->passiveMaterialPlanes_.size()));
-      kkg_->passiveMaterialPlanes_.emplace_back(sbsid, sbplane, "G4_Al", 0.5*strongBackThickness);
+      kkg_->passiveMaterialPlanes_.emplace_back(sbsid, sbplane, strongBackMaterial, 0.5*strongBackThickness);
       kkg_->map_.emplace(std::make_pair(sbsid, std::static_pointer_cast<Surface>(sbplane)));
       sectors.push_back(sector);
     }
@@ -532,22 +533,26 @@ namespace mu2e {
       this->addConcretePlane(*det, normalAxis, center, hw1, hw2, halfThickness, material);
     };
 
-    // --- Side walls (the dominant omission). Type 1 regular-concrete wall T-blocks.
-    // Empirically from ExtShieldDownstream_v06.txt: the 904.4 mm V outline tiles
-    // along z (~914 mm center spacing), the 3851 mm length is the vertical (y)
-    // extent, and the 1361.6 mm U crossbar is the wall thickness (x, the slab
-    // normal). Box centers split into the north wall (x ~ -1897) and the south
-    // wall (x ~ -5911), each emitted as one x-normal slab.
-    // Averaged x half-thickness over the T cross-section (crossbar 1361.6 mm over
-    // ~49% of z, stem 447.2 mm over ~51%) ~= 899 mm -> half ~= 449.5 mm; using
-    // this keeps the mean crossed concrete (energy loss) correct without 4 Gauss
-    // planes per wall. Half-extents: y from length/2, z from the block V half (452.2).
+    // --- Side walls. Type 1 regular-concrete wall T-blocks. Geometry from
+    // ExtShieldDownstream (outlineType1 U/V verts + lengthType1): the T cross-section
+    // lies in the U-V plane, extruded over lengthType1; for the walls the orientation
+    // maps U->x (wall thickness), V->z (footprint), length->y (vertical extent).
+    //   U verts +/-680.8 / +/-223.6  -> crossbar 1361.6 mm thick, stem 447.2 mm thick
+    //   V verts +/-452.2 (span 904.4); crossbar occupies V in [-452.2,-5] = 447.2 mm,
+    //                                  stem     occupies V in [-5, 452.2] = 457.2 mm
+    // The wall is one x-normal slab per side whose x half-thickness is the z-weighted
+    // mean of the T thickness, so the mean crossed concrete (energy loss) is exact
+    // without four Gauss planes per wall:
+    //   2*xHalf = (1361.6*447.2 + 447.2*457.2)/904.4 = 899.3 mm  ->  xHalfThick = 449.7
+    // Box centers split into the north wall (x ~ -1897) and south wall (x ~ -5911)
+    // about the DS axis (x = -3904); each is emitted as a single slab.
     {
-      double const lenType1   = config_.hasName("ExtShieldDownstream.lengthType1") ?
-                                config_.getDouble("ExtShieldDownstream.lengthType1") : 3851.0;
-      double const yHalfBlock = 0.5*lenType1;        // vertical half-height per block (~1925.5)
-      double const zHalfBlock = 452.2;               // half V outline -> z footprint per block
-      double const xHalfThick = 449.5;               // averaged T x half-thickness (see note)
+      std::vector<double> v1Verts;
+      config_.getVectorDouble("ExtShieldDownstream.outlineType1VVerts", v1Verts);
+      auto const v1ext = std::minmax_element(v1Verts.begin(), v1Verts.end());
+      double const yHalfBlock = 0.5*config_.getDouble("ExtShieldDownstream.lengthType1"); // vertical half-height
+      double const zHalfBlock = 0.5*(*v1ext.second - *v1ext.first); // half V-outline span -> z footprint (452.2)
+      double const xHalfThick = 449.7;               // z-weighted mean T x half-thickness (derivation above)
       // north wall: x > -3904 (DS axis); south wall: x < -3904
       buildAveragedRegion(1, 0, yHalfBlock, zHalfBlock, xHalfThick,
           [](std::vector<double> const& c){ return c[0] > -3904.0; }); // north
