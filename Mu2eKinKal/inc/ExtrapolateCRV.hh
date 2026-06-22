@@ -97,18 +97,26 @@ namespace mu2e {
     for(size_t isect = 0; isect < sectors_.size(); ++isect ){
       auto const& sector = sectors_[isect];
       double normvel = vel.Dot(sector.sector_->normal())*timeDirSign(tdir); // sign by extrapolation direction
-      // Decide if the sector plane is ahead using the normal-projected time-to-reach, NOT the
-      // velocity-dot distance. The old measure ((center-pos).vel) projects onto the full velocity,
-      // so a sector whose center is laterally offset from the (stale, material-edge) evaluation
-      // point could compute as "behind" and be skipped even though the track crosses its plane
-      // ahead. After the DS/concrete material steps pin the evaluation point at the concrete, that
-      // mis-skip dropped the very top module containing the crossing. signed_perp/normvel is the
-      // same quantity the backward branch below uses.
+      // signed_perp/normvel is the normal-projected extrapolation time to reach this plane from the
+      // single CRV-ward evaluation point of the piece. It is used ONLY by the backward non-converged
+      // branch below; it is NOT used to skip a sector. (Older code skipped a sector whose plane was
+      // "behind" this point, but that drops a crossing that is behind the evaluation point yet still
+      // within the piece -- the failure mode that lost the top module after a concrete step, and now
+      // CRV_T1 in the stacked extracted geometry, see below.)
       double signed_perp = (sector.sector_->center()-pos).Dot(sector.sector_->normal());
-      double time_to_sector = signed_perp / normvel; // extrap-time to reach the plane; <0 = plane behind
+      double time_to_sector = signed_perp / normvel; // extrap-time to reach the plane; <0 = plane behind eval point
       if(debug_ > 4)std::cout << "CRV extrap normvel " << normvel << " time_to_sector " << time_to_sector << " signed_perp " << signed_perp << std::endl;
-      // skip if grazing the plane (per-plane floor: stricter for z-normal end-caps), or the plane is behind
-      if(fabs(normvel) < sectorminv_[isect] || time_to_sector < 0 )continue;
+      // Skip ONLY grazing crossings (per-plane floor, stricter for z-normal end-caps). Do NOT skip on
+      // the single-point "behind" test: in a STACKED-sector geometry (the extracted EX/T1/T2 sit ~150 mm
+      // apart in y) one field-free straight-line piece overshoots the whole cluster, so a lower plane
+      // (e.g. CRV_T1, directly under CRV_EX) is behind the CRV-ward end of the piece yet still crossed
+      // WITHIN it. intersect(trange) + inbounds below gate the crossing correctly, and the intersections
+      // are time-sorted before they are registered, so all stacked crossings are kept in order. This
+      // mirrors ExtrapolateCylinders, which intersects every concentric DS shell and filters only on
+      // grazing. Run-2 geometry sees at most one CRV sector per direction (no stack) and each piece
+      // stops at its sector, so nothing is overshot: the recorded crossings there are unchanged -- this
+      // only adds some always-rejected intersect() calls on non-crossed sectors.
+      if(fabs(normvel) < sectorminv_[isect])continue;
       // try to intersect
       auto newinter = KinKal::intersect(fittraj,*sector.sector_,trange,intertol_,tdir);
       if(debug_ > 3)std::cout << "CRV " << newinter  << std::endl;

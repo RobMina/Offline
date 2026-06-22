@@ -57,7 +57,7 @@ namespace mu2e {
       using KKMATCYLXING = KKShellXing<KTRAJ,KinKal::Cylinder>;
       using KKMATCYLXINGPTR = std::shared_ptr<KKMATCYLXING>;
       using KKMATCYLXINGCOL = std::vector<KKMATCYLXINGPTR>;
-      using KKMATRECXING = KKShellXing<KTRAJ,KinKal::Rectangle>;
+      using KKMATRECXING = KKShellXing<KTRAJ,KinKal::Plane>;  // passive plane: Rectangle or Annulus
       using KKMATRECXINGPTR = std::shared_ptr<KKMATRECXING>;
       using KKMATRECXINGCOL = std::vector<KKMATRECXINGPTR>;
       using KKINTER = std::tuple<SurfaceId,KinKal::Intersection>;
@@ -176,7 +176,7 @@ namespace mu2e {
       KKSTXINGCOL stxings_;  // stopping target material crossings used in extrapolation
       KKCRVXINGCOL crvxings_; // crv crossings using in extrapolation
       KKMATCYLXINGCOL matcylxings_; // passive cylindrical material crossings used in extrapolation
-      KKMATRECXINGCOL matrecxings_; // passive rectangular material crossings used in extrapolation
+      KKMATRECXINGCOL matrecxings_; // passive planar material crossings used in extrapolation
       KKINTERCOL inters_; // other recorded intersections
       KKSTRAWHITCLUSTERCOL strawhitclusters_;  // straw hit clusters used in this fit
       // utility function to convert to generic types

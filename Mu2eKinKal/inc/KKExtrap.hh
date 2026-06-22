@@ -332,7 +332,7 @@ namespace mu2e {
   }
 
   template <class KTRAJ> void KKExtrap::extrapolatePassiveMaterial(KKTrack<KTRAJ>& ktrk,TimeDir tdir) const {
-    using KKMATRECXING = KKShellXing<KTRAJ,KinKal::Rectangle>;
+    using KKMATRECXING = KKShellXing<KTRAJ,KinKal::Plane>;  // passive plane (Rectangle or Annulus)
     using MaterialPlane = ExtrapolatePlanes::MaterialPlane;
     GeomHandle<mu2e::KinKalGeom> kkg_h;
     GeomHandle<mu2e::KKMaterial> kkmat_h;

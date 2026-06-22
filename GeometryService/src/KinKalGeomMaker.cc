@@ -169,6 +169,38 @@ namespace mu2e {
           reff - 0.5*teff, reff + 0.5*teff, 0.5*(zmin + zmax), 0.5*(zmax - zmin), "DSCoilMix");
     }
 
+    // DS cryostat + thermal-shield END WALLS (z-normal annuli). Tracks bound for the upstream/
+    // downstream CRV sectors (CRV-U / CRV-D) leave the solenoid through its z-faces and cross the
+    // cryostat and shield end walls; the radial shells above only catch tracks that exit radially.
+    // Model each end wall as a material annulus spanning the cryostat footprint (bore -> outer
+    // radius) at the wall's own thickness/material, so a z-exiting track sees the same passive
+    // material the truth muon does. An Annulus (not a Disk) leaves the open beam bore field-free,
+    // and its inner/outer radii keep radially-exiting (CRV-top) tracks out of bounds. The walls go
+    // in passiveMaterialPlanes_ (z-normal -> crossed by ExtrapolatePlanes, like concrete/strongback),
+    // re-using DS_Front/DS_Back with index 1 = cryostat, 2 = shield (distinct from the index-0
+    // geometric bounding disks below). Geometry from DetectorSolenoid: (shield_)endWallHalfLength().
+    {
+      double const dsz = ds->position().z();
+      auto addEndWall = [this,&toDetectorZ](SurfaceId const& sid, double zmu2e, double rin,
+          double rout, double halfThick, std::string const& material) {
+        auto annulus = std::make_shared<Annulus>(VEC3(0.0,0.0,1.0),VEC3(1.0,0.0,0.0),
+            VEC3(0.0,0.0,toDetectorZ(zmu2e)),rin,rout);
+        kkg_->passiveMaterialPlanes_.emplace_back(sid,annulus,material,halfThick);
+        kkg_->map_.emplace(std::make_pair(sid,std::static_pointer_cast<Surface>(annulus)));
+      };
+      double const cOff = ds->halfLength()        - ds->endWallHalfLength();        // cryo wall center inset
+      double const sOff = ds->shield_halfLength() - ds->shield_endWallHalfLength(); // shield wall center inset
+      // cryostat end walls (StainlessSteel)
+      addEndWall(SurfaceId(SurfaceIdEnum::DS_Front,1), dsz-cOff, ds->rIn1(), ds->rOut2(),
+          ds->endWallHalfLength(), ds->material());
+      addEndWall(SurfaceId(SurfaceIdEnum::DS_Back,1),  dsz+cOff, ds->rIn1(), ds->rOut2(),
+          ds->endWallHalfLength(), ds->material());
+      // thermal-shield end walls (G4_Al)
+      addEndWall(SurfaceId(SurfaceIdEnum::DS_Front,2), dsz-sOff, ds->shield_rIn1(), ds->shield_rOut2(),
+          ds->shield_endWallHalfLength(), ds->shield_material());
+      addEndWall(SurfaceId(SurfaceIdEnum::DS_Back,2),  dsz+sOff, ds->shield_rIn1(), ds->shield_rOut2(),
+          ds->shield_endWallHalfLength(), ds->shield_material());
+    }
 
     // hard-coded for now
     auto ipa= std::make_shared<Cylinder>(VEC3(0.0,0.0,1.0),VEC3(0.0,0.0,-2770),300.0,500.0);
@@ -366,20 +398,26 @@ namespace mu2e {
       default:
         throw cet::exception("Service") << "invalid concrete-plane normal axis " << normalAxis << std::endl;
     }
-    // Split the crossing into TWO Gauss-point planes along the normal, at center +/- halfThickness/(2*sqrt3),
-    // each carrying HALF the material. This integrates the bulk multiple scattering with a 2-point Gauss
-    // rule (exact for a uniform slab: reproduces the continuous angle-position covariance) while preserving
-    // the total crossed material, so energy loss is unchanged. Mirrors the Type-2 roof treatment; a single
-    // thin plane gets Var(angle) and the angle-position correlation right but Var(position) ~25% low.
+    // Split the crossing into TWO Gauss-point planes along the normal, at center +/- halfThickness/sqrt3,
+    // each carrying material half-depth 'halfThickness' (so the two together = the full slab depth
+    // 2*halfThickness). This integrates the bulk multiple scattering with a 2-point Gauss rule (exact
+    // for a uniform slab: reproduces the continuous angle-position covariance) while preserving the total
+    // crossed material, so energy loss is correct. Mirrors the Type-2 roof treatment EXACTLY (planes at
+    // +/- yhalf/sqrt3, material yhalf each, yhalf = half-depth); a single thin plane gets Var(angle) and
+    // the angle-position correlation right but Var(position) ~25% low.
+    // NB: 'halfThickness' is the HALF slab depth -- callers pass it as such (e.g. side walls 449.7 mm for
+    // the ~899 mm wall). An earlier 0.5* here placed both planes too close and gave each half the material,
+    // so every region built through this helper (side walls, extra roof types, endcap) modelled only HALF
+    // its concrete; the central Type-2 roof was unaffected (separate code path).
     double const invSqrt3 = 1.0/std::sqrt(3.0);
     auto const center0 = VEC3(det.toDetector(centerMu2e));
     for(int iplane = 0; iplane < 2; ++iplane) {
       double const sign = iplane == 0 ? -1.0 : 1.0;
-      auto const center = center0 + (sign*0.5*halfThickness*invSqrt3)*norm;
+      auto const center = center0 + (sign*halfThickness*invSqrt3)*norm;
       auto const plane = std::make_shared<Rectangle>(norm, udir, center, uhw, vhw);
       SurfaceId sid(SurfaceIdEnum::DS_HatchConcrete,
                     static_cast<int>(kkg_->passiveMaterialPlanes_.size()));
-      kkg_->passiveMaterialPlanes_.emplace_back(sid, plane, material, 0.5*halfThickness);
+      kkg_->passiveMaterialPlanes_.emplace_back(sid, plane, material, halfThickness);
       kkg_->map_.emplace(std::make_pair(sid, std::static_pointer_cast<Surface>(plane)));
     }
   }

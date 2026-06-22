@@ -11,6 +11,7 @@
 #include "Offline/KinKalGeom/inc/CRV.hh"
 #include "Offline/DataProducts/inc/SurfaceId.hh"
 #include "KinKal/Geometry/Surface.hh"
+#include "KinKal/Geometry/Plane.hh"
 #include "KinKal/Geometry/Rectangle.hh"
 #include "Offline/Mu2eInterfaces/inc/Detector.hh"
 #include <memory>
@@ -22,16 +23,17 @@ namespace mu2e {
     public:
       using SurfacePtr = std::shared_ptr<KinKal::Surface>;
       using RecPtr = std::shared_ptr<KinKal::Rectangle>;
+      using PlanePtr = std::shared_ptr<KinKal::Plane>;
       using SurfacePair =std::pair<const SurfaceId, SurfacePtr >;
       using SurfacePairCollection = std::vector<SurfacePair>;
       using SurfacePairIter = std::multimap<SurfaceId,SurfacePtr>::const_iterator;
       using KKGMap = std::multimap<SurfaceId,SurfacePtr>;
       struct PassiveMaterialPlane {
         SurfaceId sid_;
-        RecPtr surface_;
+        PlanePtr surface_;  // any planar surface: Rectangle (concrete/strongback/CRV) or Annulus (DS end walls)
         std::string material_;
         double thickness_;
-        PassiveMaterialPlane(SurfaceId const& sid, RecPtr const& surface, std::string const& material, double thickness) :
+        PassiveMaterialPlane(SurfaceId const& sid, PlanePtr const& surface, std::string const& material, double thickness) :
           sid_(sid), surface_(surface), material_(material), thickness_(thickness) {}
       };
       using PassiveMaterialPlaneCollection = std::vector<PassiveMaterialPlane>;
