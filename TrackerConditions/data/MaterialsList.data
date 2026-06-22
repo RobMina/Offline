@@ -34,16 +34,13 @@ NbTi 6.5 0.0 0.0 +2 0.65 Niobium 0 0.35 Titanium 0 -10 -20 -30 20.0 1.0 solid
 G4_Al 2.700000 0.0 0.0 +1 100.0e-2 Aluminum 0 24.01000 106.40000 -30 20.0 1.0 solid
 DS1Coil 3.35 0.0 0.0 +2 0.67 Aluminum 0 0.33 NbTi 1 -10 -20 -30 20.0 1.0 solid
 DS2Coil 3.031 0.0 0.0 +2 0.813 Aluminum 0 0.187 NbTi 1 -10 -20 -30 20.0 1.0 solid
-DS1CoilMix 3.35 0.0 0.0 +2 0.67 Aluminum 0 0.33 NbTi 1 -10 -20 -30 20.0 1.0 solid
-DS2CoilMix 3.031 0.0 0.0 +2 0.813 Aluminum 0 0.187 NbTi 1 -10 -20 -30 20.0 1.0 solid
 # DSCoilMix: the 11 DS coils collapsed into ONE effective material for the KinKalGeom long-cylinder
 # coil approximation (individual coils are too short in z to be reliably intersected by the extrapolation).
-# z-coverage-weighted blend of the 8 DS1CoilMix coils (41 mm, 3.35 g/cm3, 67/33 Al/NbTi, z-cover 3128 mm)
-# and the 3 DS2CoilMix coils (20.5 mm, 3.031 g/cm3, 81.3/18.7 Al/NbTi, z-cover 5332.5 mm): z-mass composition
+# z-coverage-weighted blend of the 8 inner DS1-type coils (41 mm, 3.35 g/cm3, 67/33 Al/NbTi, z-cover 3128 mm)
+# and the 3 outer DS2-type coils (20.5 mm, 3.031 g/cm3, 81.3/18.7 Al/NbTi, z-cover 5332.5 mm): z-mass composition
 # 73.23% Al + 26.77% NbTi, areal mass 8.994 g/cm2; density = areal mass / (z-weighted thickness 28.08 mm) =
 # 3.2032, scaled to the geometric thickness as CRVModule is. Reproduces the true z-avg t/X0 = 0.473.
 DSCoilMix 3.203230 0.0 0.0 +2 0.73227 Aluminum 0 0.26773 NbTi 1 -10 -20 -30 20.0 1.0 solid
-DSSStainless 8.02 0.0 0.0 +5 0.02 Manganese 0 0.01 Silicon 0 0.19 Chromium 0 0.1 Nickel 0 0.68 Iron 0 -10 -20 -30 20.0 1.0 solid
 StainlessSteel 8.02 0.0 0.0 +5 0.02 Manganese 0 0.01 Silicon 0 0.19 Chromium 0 0.1 Nickel 0 0.68 Iron 0 -10 -20 -30 20.0 1.0 solid
 # Concrete definitions translated from Mu2eG4/src/ConstructMaterials.cc.
 CONCRETE_MARS 2.35 0.0 0.0 +9 0.006 Hydrogen 0 0.030 Carbon 0 0.500 Oxygen 0 0.010 Sodium 0 0.030 Aluminum 0 0.200 Silicon 0 0.010 Potasium 0 0.200 Calcium 0 0.014 Iron 0 -10 -20 -30 20.0 1.0 solid

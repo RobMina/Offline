@@ -59,8 +59,6 @@ cet_build_plugin(InFlightStepDumper art::module
 cet_build_plugin(MakeSurfaceSteps art::module
     REG_SOURCE src/MakeSurfaceSteps_module.cc
     LIBRARIES REG
-      Offline::CosmicRayShieldGeom
-      Offline::GeometryService
       Offline::MCDataProducts
 )
 

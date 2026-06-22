@@ -39,7 +39,6 @@
 #include "Geant4/G4Threading.hh"
 
 #include <map>
-#include <algorithm>
 
 using namespace std;
 
@@ -104,15 +103,7 @@ namespace mu2e {
     //----------------
     std::vector<string> lvlist(conf.sensitiveVolumes());
     for(const auto& name : lvlist) {
-      // art product instance names may not contain underscores (the friendly-name
-      // separator), but G4 logical-volume names often do (e.g. "DSCoil_1",
-      // "ExtShieldDownstreamBox_3"). Key lvsd_ by the real volume name (used for
-      // locateVolInfo and the G4 SD), but produce the StepPointMCCollection under a
-      // sanitized, underscore-free instance name. The SD fills its collection by
-      // pointer (see updateSensitiveDetectors), so the two names need not match.
-      std::string instance = name;
-      instance.erase(std::remove(instance.begin(), instance.end(), '_'), instance.end());
-      lvsd_[name] = StepInstance(instance);
+      lvsd_[name] = StepInstance(name);
     }
 
     //----------------
@@ -146,11 +137,7 @@ namespace mu2e {
     art::ServiceHandle<Mu2eG4Helper> helper;
 
     for(auto& iter : lvsd_) {
-      // Register the SD under the (sanitized) step/instance name, so that
-      // registerSensitiveDetectors()'s FindSensitiveDetector(stepName) below matches it
-      // (and the per-event collection it is handed is the right one). Attach the SD to the
-      // real-named logical volume via the lvsd_ key.
-      auto sd = new Mu2eG4SensitiveDetector(iter.second.stepName, config);
+      auto sd = new Mu2eG4SensitiveDetector(iter.first, config);
       SDman->AddNewDetector(sd);
       helper->locateVolInfo(iter.first).logical->SetSensitiveDetector(sd);
     }

@@ -18,15 +18,12 @@
 #endif
 
 namespace mu2e {
-  class CrvStep; // CRV truth steps are an alternate source of SurfaceSteps
   class SurfaceStep {
     public:
     SurfaceStep(){};
 #ifndef __ROOTCLING__
       // create from a StepPointMC. Association to a SurfaceId must be done outside this class
     SurfaceStep(SurfaceId sid, StepPointMC const& spmc, GeomHandle<DetectorSystem> const& det);
-      // create from a CrvStep (CRV scintillator truth); SurfaceId is the CRV sector
-    SurfaceStep(SurfaceId sid, CrvStep const& cs, GeomHandle<DetectorSystem> const& det);
 #endif
     // accessors
       float energyDeposit() const { return edep_; }
@@ -44,8 +41,6 @@ namespace mu2e {
       // append a MCStep to this step. The step must have the same SimParticle.  Caller is responsible
       // to insure this step is subsequent in time to the previous step
       void addStep(StepPointMC const& spmc, GeomHandle<DetectorSystem> const& det);
-      // append a CrvStep to this step (same SimParticle, same CRV sector, subsequent in time)
-      void addStep(CrvStep const& cs, GeomHandle<DetectorSystem> const& det);
 #endif
     private:
       SurfaceId  sid_ = SurfaceIdDetail::unknown; // Identifier of the surface this step crosses
