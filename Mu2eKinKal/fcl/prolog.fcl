@@ -39,7 +39,7 @@ Mu2eKinKal : {
     SampleSurfaces : [] # specific to the fit type
     SaveHitCalibInfo : false
     SaveDomains : false
-    SaveMaterialXings : true # save generic passive material Xings (filled during extrapolation) in the KalSeed
+    SaveMaterialXings : false # save generic passive material Xings (filled during extrapolation) in the KalSeed
   }
 
    CHSEEDFIT: {
@@ -377,7 +377,7 @@ Mu2eKinKal : {
     MaxDtStep : 1.0 # (ns)
     MinV : 0.0 # mm/ns
     BCorrTolerance : 1e-4 # momemntum fraction
-    ToTrackerEnds : true
+    ToTrackerPerimeter : true
     Upstream : true
     BackToTracker : false
     ToOPA : true
@@ -390,7 +390,7 @@ Mu2eKinKal : {
     MaxDtStep : 10.0 # (ns)
     MinV : 0.0 # mm/ns
     BCorrTolerance : 1e-2 # momemntum fraction
-    ToTrackerEnds : true
+    ToTrackerPerimeter : true
     Upstream : false
     BackToTracker : false
     ToOPA : false
@@ -402,9 +402,8 @@ Mu2eKinKal : {
     MaxDt : 200.0 # (ns)
     MaxDtStep : 1.0 # (ns)
     MinV : 1e-5 # mm/ns
-    MinVLong : 265.0 # mm/ns; near-normal-incidence floor for CRV end-cap (z-normal U/D/E) planes -> suppresses grazing fakes from soft transverse cosmics
     BCorrTolerance : 1e-2 # momemntum fraction
-    ToTrackerEnds : false
+    ToTrackerPerimeter : false
     Upstream : false
     BackToTracker : false
     ToOPA : false
@@ -416,9 +415,8 @@ Mu2eKinKal : {
     MaxDt : 200.0 # (ns)
     MaxDtStep : 1.0 # (ns)
     MinV : 1e-5 # mm/ns
-    MinVLong : 265.0 # mm/ns; near-normal-incidence floor for CRV end-cap (z-normal U/D/E) planes -> suppresses grazing fakes from soft transverse cosmics
     BCorrTolerance : 1e-2 # momemntum fraction
-    ToTrackerEnds : false
+    ToTrackerPerimeter : false
     Upstream : false
     BackToTracker : false
     ToOPA : false
@@ -488,8 +486,8 @@ Mu2eKinKal : {
       @table::Mu2eKinKal.KKFIT
       SampleSurfaces : ["ST_Outer","ST_Front","ST_Back"] # these are additional surfaces; surfaces used in extrapolation are also sampled
       # save trajectories in the Detector region
-     SaveDomains : true
-     SaveTrajectory : Detector
+      SaveDomains : true
+      SaveTrajectory : Detector
     }
     FitSettings : {
       @table::Mu2eKinKal.LHSEEDFIT
@@ -530,8 +528,8 @@ Mu2eKinKal : {
       # Additional width is needed here as straight tracks have worse time resolution
       MaxCaloClusterDt: 8
       # save the full trajectory
-       SaveTrajectory: Full
-       SaveDomains : false # meaningless for Linefit
+      SaveTrajectory: Full
+      SaveDomains : false # meaningless for Linefit
     }
     FitSettings : @local::Mu2eKinKal.CHSEEDFIT
     ExtensionSettings : @local::Mu2eKinKal.CHDRIFTEXT
@@ -621,6 +619,29 @@ Mu2eKinKal : {
 
 Mu2eKinKal : {
   @table::Mu2eKinKal
+
+  RegrowLH : {
+    module_type : RegrowLoopHelix
+    CaloClusterCollection : "CaloClusterMaker"
+    StrawDigiIndexMap : "SelectReco:StrawDigiMap"
+    RefitSettings : {
+      @table::Mu2eKinKal.REGROW
+      BFieldCorrection : true
+    }
+    KKFitSettings: {
+      @table::Mu2eKinKal.KKFIT
+      SampleSurfaces : ["ST_Outer","ST_Front","ST_Back"]
+      AddHits : false
+      SaveDomains : true
+      SaveTrajectory : Full
+    }
+    ExtrapolationSettings :{
+      @table::Mu2eKinKal.LHDRIFTXTRAP
+    }
+    Extend: false
+    MustRegrow : "None"
+  }
+
   producers : {
     # seed fits: these don't use drift information or BField corrections
     KLSeedFit: @local::Mu2eKinKal.KLSeedFit
@@ -656,7 +677,6 @@ Mu2eKinKal.producers.KKUeSeedFit.FitDirection : @local::FitDir.downstream
 Mu2eKinKal.producers.KKUmuSeedFit.ModuleSettings.FitParticle : @local::Particle.muminus
 Mu2eKinKal.producers.KKUmuSeedFit.FitDirection : @local::FitDir.downstream
 
-# save trajectories in the Detector region for downstream fits, just the T0 segment for the rest
 Mu2eKinKal.producers.KKDe.ModuleSettings.FitParticle : @local::Particle.eminus
 Mu2eKinKal.producers.KKDe.FitDirection : @local::FitDir.downstream
 Mu2eKinKal.producers.KKDmu.ModuleSettings.FitParticle : @local::Particle.muminus
@@ -665,9 +685,5 @@ Mu2eKinKal.producers.KKUe.ModuleSettings.FitParticle : @local::Particle.eminus
 Mu2eKinKal.producers.KKUe.FitDirection : @local::FitDir.upstream
 Mu2eKinKal.producers.KKUmu.ModuleSettings.FitParticle : @local::Particle.muminus
 Mu2eKinKal.producers.KKUmu.FitDirection : @local::FitDir.upstream
-# propagate upstream fits back to the tracker
-Mu2eKinKal.producers.KKUe.ExtrapolationSettings.BackToTracker : true
-Mu2eKinKal.producers.KKUmu.ExtrapolationSettings.BackToTracker : true
 
-#
 END_PROLOG
