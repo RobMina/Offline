@@ -148,7 +148,7 @@ namespace mu2e {
       double tprec_; // TPOCA calculation nominal precision
       StrawHitFlag addsel_, addrej_; // selection and rejection flags when adding hits
       // parameters controlling adding hits
-      float maxStrawHitDoca_, maxStrawHitDt_, maxSeedHitDt_, maxStrawDoca_, maxStrawDocaCon_, maxStrawUposBuff_;
+      float maxStrawHitDoca_, maxStrawHitDt_, maxStrawDoca_, maxStrawDocaCon_, maxStrawUposBuff_;
       int maxDStraw_; // maximum distance from the track a strawhit can be to consider it for adding.
       // cached info computed from the tracker, used in hit adding; these must be lazy-evaluated as the tracker doesn't exist on construction
       mutable double strawradius_ = 0;
@@ -188,7 +188,6 @@ namespace mu2e {
     addrej_(fitconfig.addHitReject()),
     maxStrawHitDoca_(fitconfig.maxStrawHitDOCA()),
     maxStrawHitDt_(fitconfig.maxStrawHitDt()),
-    maxSeedHitDt_(fitconfig.maxSeedHitDt()),
     maxStrawDoca_(fitconfig.maxStrawDOCA()),
     maxStrawDocaCon_(fitconfig.maxStrawDOCAConsistency()),
     maxStrawUposBuff_(fitconfig.maxStrawUposBuff()),
@@ -238,13 +237,8 @@ namespace mu2e {
       // use the hit z position to estimate the particle time (same formula as zTime).
       auto hpos = wline->position3(htime);
       double ptime = Mu2eKinKal::zTime(ptraj, hpos.Z(), htime);
-      // optional clamp: default MaxSeedHitDt = infinity leaves finite ptime unchanged (LH/KL bit-identical)
       if (!std::isfinite(ptime)) {
         ptime = htime; // vz~0: same fallback as the old vel.Z()!=0 guard
-      } else {
-        double dtp = ptime - htime;
-        if (std::abs(dtp) > maxSeedHitDt_)
-          ptime = htime + std::copysign(static_cast<double>(maxSeedHitDt_), dtp);
       }
       CAHint hint(ptime,htime);
       // compute PCA between the seed trajectory and this straw
