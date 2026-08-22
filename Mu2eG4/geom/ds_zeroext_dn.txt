@@ -1,0 +1,15 @@
+# Origin shift for Mu2e: 0. 0. 0.
+# Zero-field extension BELOW the DS map (y<-1200), over the DS x/z footprint, down to y=-4000.
+# Companion to ds_zeroext_up.txt: the bfcorr=true domain walk also runs below the tracker, so the
+# down side needs a defined (=0) field too. Abuts the DS map (y down to -1200); no bore overlap.
+param maxline=128 current=1 gradient=1 normB=1 normE=1
+grid X0=-5096 Y0=-4000 Z0=3071 nX=2 nY=2 nZ=2 dX=2400 dY=2800 dZ=13000
+data
+-5096 -4000 3071 0 0 0
+-2696 -4000 3071 0 0 0
+-5096 -1200 3071 0 0 0
+-2696 -1200 3071 0 0 0
+-5096 -4000 16071 0 0 0
+-2696 -4000 16071 0 0 0
+-5096 -1200 16071 0 0 0
+-2696 -1200 16071 0 0 0

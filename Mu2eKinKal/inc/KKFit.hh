@@ -148,7 +148,7 @@ namespace mu2e {
       double tprec_; // TPOCA calculation nominal precision
       StrawHitFlag addsel_, addrej_; // selection and rejection flags when adding hits
       // parameters controlling adding hits
-      float maxStrawHitDoca_, maxStrawHitDt_, maxStrawDoca_, maxStrawDocaCon_, maxStrawUposBuff_;
+      float maxStrawHitDoca_, maxStrawHitDt_, maxSeedHitDt_, maxStrawDoca_, maxStrawDocaCon_, maxStrawUposBuff_;
       int maxDStraw_; // maximum distance from the track a strawhit can be to consider it for adding.
       // cached info computed from the tracker, used in hit adding; these must be lazy-evaluated as the tracker doesn't exist on construction
       mutable double strawradius_ = 0;
@@ -164,6 +164,7 @@ namespace mu2e {
       double addStrawMinDz_;
       int strawNBuffer_;
       bool saveHitCalib_;
+      bool savematxings_; // save generic (post-extrapolation) passive material Xings in the KalSeed
       SurfaceIdCollection ssids_;
   };
 
@@ -187,6 +188,7 @@ namespace mu2e {
     addrej_(fitconfig.addHitReject()),
     maxStrawHitDoca_(fitconfig.maxStrawHitDOCA()),
     maxStrawHitDt_(fitconfig.maxStrawHitDt()),
+    maxSeedHitDt_(fitconfig.maxSeedHitDt()),
     maxStrawDoca_(fitconfig.maxStrawDOCA()),
     maxStrawDocaCon_(fitconfig.maxStrawDOCAConsistency()),
     maxStrawUposBuff_(fitconfig.maxStrawUposBuff()),
@@ -198,7 +200,8 @@ namespace mu2e {
     skipStrawCheck_(fitconfig.skipStrawCheck()),
     addStrawMinDz_(fitconfig.addStrawMinDz()),
     strawNBuffer_(fitconfig.strawNBuffer()),
-    saveHitCalib_(fitconfig.saveHitCalib())
+    saveHitCalib_(fitconfig.saveHitCalib()),
+    savematxings_(fitconfig.saveMatXings())
   {
     if (fitconfig.saveTraj() == "T0") {
       savetraj_ = t0seg;
@@ -232,13 +235,17 @@ namespace mu2e {
       const Straw& straw = tracker.getStraw(combohit.strawId());
       auto wline = Mu2eKinKal::hitLine(combohit,straw,strawresponse); // points from the signal to the straw center
       double htime = combohit.correctedTime();
-      // use the hit z position to estimate the particle time.
+      // use the hit z position to estimate the particle time (same formula as zTime).
       auto hpos = wline->position3(htime);
-      auto ppos = ptraj.position3(htime);
-      auto vel = ptraj.velocity(htime);
-      double ptime = htime;
-      if (vel.Z() != 0)
-        ptime += (hpos.Z()-ppos.Z())/vel.Z();
+      double ptime = Mu2eKinKal::zTime(ptraj, hpos.Z(), htime);
+      // optional clamp: default MaxSeedHitDt = infinity leaves finite ptime unchanged (LH/KL bit-identical)
+      if (!std::isfinite(ptime)) {
+        ptime = htime; // vz~0: same fallback as the old vel.Z()!=0 guard
+      } else {
+        double dtp = ptime - htime;
+        if (std::abs(dtp) > maxSeedHitDt_)
+          ptime = htime + std::copysign(static_cast<double>(maxSeedHitDt_), dtp);
+      }
       CAHint hint(ptime,htime);
       // compute PCA between the seed trajectory and this straw
       PCA pca(ptraj, wline, hint, tprec_ );
@@ -838,13 +845,21 @@ namespace mu2e {
         }
         kseed._segments.shrink_to_fit();
         if(savedomains_){
+          // Persist intersecting domains as begins+final-end (like Full). Do not use inRange(tmax):
+          // half-open ranges + DomainMargin=0 end exactly at tmax and can leave domainBounds empty.
           kseed._domainbounds.reserve(kktrk.domains().size()+1); // oversized
+          double last_domain_end = 0.0;
+          bool saved_any = false;
           for (auto const& domain : kktrk.domains()){
-            if((domain->range().begin() > tmin && domain->range().end() < tmax) || domain->range().inRange(tmin) || domain->range().inRange(tmax) )
-              kseed._domainbounds.push_back(domain->begin());
-            // save end of last domain
-            if(domain->range().inRange(tmax))kseed._domainbounds.push_back(domain->end());
+            double const db = domain->begin();
+            double const de = domain->end();
+            if(db < tmax && de > tmin){
+              kseed._domainbounds.push_back(db);
+              last_domain_end = de;
+              saved_any = true;
+            }
           }
+          if(saved_any) kseed._domainbounds.push_back(last_domain_end);
           kseed._domainbounds.shrink_to_fit();
           kseed._dtol = kktrk.config().tol_;
         }
@@ -889,6 +904,23 @@ namespace mu2e {
       double dmom,paramomvar,perpmomvar;
       crvxing->materialEffects(dmom,paramomvar,perpmomvar);
       inters.emplace_back(ktraj.stateEstimate(crvxing->time()),XYZVectorF(ktraj.bnom()),crvxing->surfaceId(),crvxing->intersection(),dmom);
+    }
+    // generic passive material Xings are only filled during extrapolation; saving them in the KalSeed is optional
+    if(savematxings_){
+      for(auto const& matxing : kktrk.materialCylXings()){
+        double stime = matxing->time() - epsilon;
+        auto const& ktraj = ptraj.nearestPiece(stime);
+        double dmom,paramomvar,perpmomvar;
+        matxing->materialEffects(dmom,paramomvar,perpmomvar);
+        inters.emplace_back(ktraj.stateEstimate(matxing->time()),XYZVectorF(ktraj.bnom()),matxing->surfaceId(),matxing->intersection(),dmom);
+      }
+      for(auto const& matxing : kktrk.materialPlaneXings()){
+        double stime = matxing->time() - epsilon;
+        auto const& ktraj = ptraj.nearestPiece(stime);
+        double dmom,paramomvar,perpmomvar;
+        matxing->materialEffects(dmom,paramomvar,perpmomvar);
+        inters.emplace_back(ktraj.stateEstimate(matxing->time()),XYZVectorF(ktraj.bnom()),matxing->surfaceId(),matxing->intersection(),dmom);
+      }
     }
     // record other intersections saved in the track
     for(auto const& interpair : kktrk.intersections()) {

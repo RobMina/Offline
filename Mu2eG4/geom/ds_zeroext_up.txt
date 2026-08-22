@@ -1,0 +1,17 @@
+# Origin shift for Mu2e: 0. 0. 0.
+# Zero-field extension ABOVE the DS map (y>1200), over the DS x/z footprint, up to y=4000.
+# Lets bfcorr=true domain initialization sample a defined (=0) field in the above-DS gap
+# (DS field is already ~0 by y~1150, measured), so the CentralHelix fit/extrapolation no longer
+# throws OutsideBFieldMap there. Coarse 2x2x2 grid: the field is identically zero so trilinear
+# interpolation is exact. Abuts the DS map (y up to 1200); does NOT overlap the DS bore.
+param maxline=128 current=1 gradient=1 normB=1 normE=1
+grid X0=-5096 Y0=1200 Z0=3071 nX=2 nY=2 nZ=2 dX=2400 dY=2800 dZ=13000
+data
+-5096 1200 3071 0 0 0
+-2696 1200 3071 0 0 0
+-5096 4000 3071 0 0 0
+-2696 4000 3071 0 0 0
+-5096 1200 16071 0 0 0
+-2696 1200 16071 0 0 0
+-5096 4000 16071 0 0 0
+-2696 4000 16071 0 0 0

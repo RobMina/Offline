@@ -1,0 +1,45 @@
+//
+// BField geometry v02 = v01 + the existing DSFringeArea map (real fringe field surrounding the DS,
+// X[-6400,-1400] Y[-2500,2500] Z[1600,16000]). This gives the bfcorr=true CentralHelix fit a DEFINED,
+// real (small but NON-zero) field in the region its domain walk drifts into around/above the DS,
+// instead of throwing OutsideBFieldMap. Real nonzero field keeps omega != 0 (an identically-zero patch
+// forces omega->0 -> NaN). DSFringeArea is listed LAST: findMap returns the first matching map in list
+// order, so the precise 25mm DS/PS/TS maps win inside their volumes and DSFringeArea only supplies the
+// surrounding fringe. Pure Offline -- no KinKal change.
+//
+
+bool hasBFieldManager   = true;
+
+int detSolFieldForm = 0;
+
+vector<string> bfield.innerMaps = {
+  "BFieldMaps/Mau13/DSMap.header",
+  "BFieldMaps/Mau13/PSMap.header",
+  "BFieldMaps/Mau13/TSuMap_fix.header",
+  "BFieldMaps/Mau13/TSdMap.header",
+  "BFieldMaps/Mau13/PStoDumpAreaMap.header",
+  "BFieldMaps/Mau13/ProtonDumpAreaMap.header",
+  "BFieldMaps/Mau13/DSExtension.header",
+  "BFieldMaps/Mau13/DSFringeArea.header"
+};
+
+double toyDS.bz            = 1.0;
+double toyDS.gradient      = 0.0; // Tesla/m
+
+string bfield.format  = "G4BL";
+string bfield.interpolationStyle = trilinear;
+
+int  bfield.verbosityLevel =  0;
+bool bfield.writeG4BLBinaries     =  false;
+
+vector<string> bfield.outerMaps = {
+  "BFieldMaps/Mau13/PSAreaMap.header",
+  "BFieldMaps/Mau13/WorldMap.header"
+};
+
+double bfield.scaleFactor = 1.0;
+
+//
+// Local Variables:
+// mode:c++
+// End:

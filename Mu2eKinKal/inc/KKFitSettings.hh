@@ -18,6 +18,7 @@
 #include "Offline/Mu2eKinKal/inc/Chi2SHU.hh"
 #include "Offline/Mu2eKinKal/inc/PanelDiagSHU.hh"
 #include "Offline/Mu2eKinKal/inc/StrawXingUpdater.hh"
+#include <limits>
 namespace mu2e {
   namespace Mu2eKinKal{
     using fhicl::Name;
@@ -83,6 +84,8 @@ namespace mu2e {
       fhicl::Sequence<std::string> addHitReject { Name("AddHitReject"), Comment("Flags required not to be present to add a hit") };
       fhicl::Atom<float> maxStrawHitDOCA { Name("MaxStrawHitDOCA"), Comment("Max DOCA to add a hit (mm)") };
       fhicl::Atom<float> maxStrawHitDt { Name("MaxStrawHitDt"), Comment("Max Detla time to add a hit (ns)") };
+      // Max |zTime particle hint - hit time| when building seed straw hits. Default infinity = legacy (no clamp).
+      fhicl::Atom<float> maxSeedHitDt { Name("MaxSeedHitDt"), Comment("Max absolute difference between z-corrected particle time hint and hit time when creating seed StrawHits (ns)"), std::numeric_limits<float>::infinity() };
       fhicl::Atom<int> maxDStraw { Name("MaxDStraw"), Comment("Maximum (integer) straw separation when adding straw hits") };
       fhicl::Atom<bool> skipStrawCheck { Name("SkipStrawCheck"), Comment("Skip rho and panel longitudinal checks when adding straws") };
       fhicl::Atom<float> addStrawMinDz { Name("AddStrawMinDz"), Comment("For tracks more vertical than this add all straws") };
@@ -98,6 +101,7 @@ namespace mu2e {
       fhicl::Atom<float> interTol { Name("IntersectionTolerance"), Comment("Tolerance for surface intersections (mm)") };
       fhicl::Atom<bool> sampleInRange { Name("SampleInRange"), Comment("Require sample times to be inside the fit trajectory time range") };
       fhicl::Atom<bool> sampleInBounds { Name("SampleInBounds"), Comment("Require sample intersection point be inside surface bounds (within tolerance)") };
+      fhicl::Atom<bool> saveMatXings { Name("SaveMaterialXings"), Comment("Save generic passive material Xings (filled during extrapolation) in the KalSeed intersections"), true };
     };
     // struct for configuring a KinKal fit module
     struct KKModuleConfig {
@@ -117,6 +121,11 @@ namespace mu2e {
       fhicl::Atom<float> MaxDt { Name("MaxDt"), Comment("Maximum time to extrapolate a fit (ns)") };
       fhicl::Atom<float> MaxDtStep { Name("MaxDtStep"), Comment("Maximum time step when extrapolating a fit (ns)") };
       fhicl::Atom<float> MinV { Name("MinV"), Comment("Minimum velocity perp to the surface extrapolate a straight track fit") };
+      fhicl::Atom<float> MinVLong { Name("MinVLong"), Comment("Minimum velocity perp to a z-normal CRV end-cap plane (mm/ns); suppresses grazing-cosmic fakes"), 265.0f };
+      fhicl::Atom<float> MaxTrackerEndsRadius { Name("MaxTrackerEndsRadius"), Comment("Max transverse radius rho=sqrt(x^2+y^2) (mm) a track may reach in the toTrackerEnds step"), 1.0e10f };
+      fhicl::Atom<bool> ToTrackerEndsRadius { Name("ToTrackerEndsRadius"), Comment("In toTrackerEnds, extrapolate to the tracker outer cylinder (TT_Outer) rather than the z-end planes"), false };
+      fhicl::Atom<float> MaxTrackerEndsZ { Name("MaxTrackerEndsZ"), Comment("Max z (mm) reachable in toTrackerEnds (used only when ToTrackerEndsRadius=true)"), 1.0e10f };
+      fhicl::Atom<float> MinTrackerEndsZ { Name("MinTrackerEndsZ"), Comment("Min z (mm) reachable in toTrackerEnds (used only when ToTrackerEndsRadius=true)"), -1.0e10f };
       fhicl::Atom<bool> BackToTracker { Name("BackToTracker"), Comment("Extrapolate reflecting tracks back to the tracker") };
       fhicl::Atom<bool> ToTrackerEnds { Name("ToTrackerEnds"), Comment("Extrapolate tracks to the tracker ends") };
       fhicl::Atom<bool> Upstream { Name("Upstream"), Comment("Extrapolate tracks upstream") };

@@ -1,0 +1,9 @@
+// Run 2 geometry for the CRV material-VALIDATION S2/digitize/reco chain, with fine G4 stepping in the
+// downstream concrete. Identical to geom_run2.txt except for a max-step UserLimit on the
+// ExtShieldDownstream concrete boxes, so the DSConcrete SurfaceStep truth finely samples the in-volume
+// multiple-scattering trajectory (the floor concrete is crossed in S2). Validation-only; not for
+// production. Read by constructExternalShielding.cc (default off without this line).
+
+#include "Offline/Mu2eG4/geom/geom_run2.txt"
+
+double ExtShieldDownstream.maxStepLength = 5.0;   // mm

@@ -261,6 +261,13 @@ namespace mu2e {
     DOMAINCOL truthDomains;
     if constexpr(!isLine){
       auto const& dbounds = recoseed.domainBounds();
+      // Need >=2 bounds to form at least one Domain. Empty/truncated domainBounds (see KKFit
+      // Detector-mode SaveDomains) plus bfcorr=true historically SEGVd in KKTrack ctor.
+      if(config_.bfcorr_ && dbounds.size() < 2){
+        if(debug_ > 0) std::cout << "KKTruthSeed: skipping seed with bfcorr=true but domainBounds.size()="
+          << dbounds.size() << std::endl;
+        return std::nullopt;
+      }
       for(size_t idb = 0; idb + 1 < dbounds.size(); ++idb){
         double tstart = dbounds[idb];
         double trange = dbounds[idb+1] - tstart;
@@ -284,6 +291,11 @@ namespace mu2e {
     // without re-running the full extension schedule (which diverges a hit-less truth-pinned fit).
     truthConfig.bfcorr_ = exconfig_.bfcorr_;
     truthConfig.tol_    = exconfig_.tol_;
+    // Extrapolation robustness knobs must match ExtensionSettings (ZeroFieldExtrap handoff, etc.)
+    truthConfig.zerofield_extrap_ = exconfig_.zerofield_extrap_;
+    truthConfig.mindtstep_ = exconfig_.mindtstep_;
+    truthConfig.minfield_ = exconfig_.minfield_;
+    truthConfig.maxdomains_ = exconfig_.maxdomains_;
     auto ktrk_truth = std::make_unique<KKTRK>(truthConfig,*kkbf_,recoseed.particle(),truthTraj,
         nostrawhits,nostrawxings,nocalohits,truthParamHits,truthDomains);
     if(!ktrk_truth->fitStatus().usable()){

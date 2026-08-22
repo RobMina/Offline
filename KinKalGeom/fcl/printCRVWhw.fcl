@@ -1,0 +1,25 @@
+# Print the KinKal CRV sector half-widths computed by KinKalGeomMaker.
+#
+# Run from the muse workspace:
+#   mu2e -c Offline/KinKalGeom/fcl/printCRVWhw.fcl -n 1
+
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : PrintCRVWhw
+
+source : {
+  module_type : EmptyEvent
+  maxEvents   : 1
+}
+
+services : {
+  @table::Services.Reco
+}
+
+services.GeometryService.inputFile  : "Offline/Mu2eG4/geom/geom_run2.txt"
+services.GeometryService.debugLevel : 1
+
+physics : {
+  trigger_paths : []
+  end_paths     : []
+}

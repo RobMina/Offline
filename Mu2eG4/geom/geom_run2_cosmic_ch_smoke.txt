@@ -1,0 +1,17 @@
+// Run 2 geometry for CRY S1 cosmic propagation in the CentralHelix CRV smoke
+// chain.
+//
+// S1 is where incoming cosmics cross the upstream/top CRV before being
+// resampled at crvStage1.  Use the same Run 2 CRV sector numbering as the
+// downstream S2/digitize/reco stages, but keep the enlarged world margins used
+// by the production cosmic S1 geometry.
+
+#include "Offline/Mu2eG4/geom/geom_run2.txt"
+
+double world.minimalMargin.xmin = 500000;
+double world.minimalMargin.xmax = 500000;
+double world.minimalMargin.zmin = 500000;
+double world.minimalMargin.zmax = 500000;
+
+// (Fine G4 stepping in the downstream concrete for the bulk-scattering trajectory study is enabled by
+//  the maxStepLength line in geom_run2_concrete_finestep.txt -- NOT here, so S1 uses normal stepping.)
