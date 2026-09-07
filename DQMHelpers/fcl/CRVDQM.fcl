@@ -50,6 +50,20 @@ physics : {
       fillLivePlots        : false
       # needs GeometryService; this FCL does not provide one
       fillSectorOccupancy  : false
+
+      # Histogram segmentation. Offline wants job-integrated histograms that
+      # hadd, so the block is omitted here and every histogram gets exactly one
+      # copy, named and titled as it always was. Per-subrun copies are the one
+      # segmented mode that is hadd-safe (they carry the real run/subrun in the
+      # name); window modes are job-local and are for the online monitor.
+      # Grammar and a fully annotated example: Offline/DQMHelpers/README.md.
+      #
+      # segmentation : {
+      #   rules : [
+      #     { match : "nEvents"  modes : [ "job", "subrun" ]
+      #       subrun : { keep : -1  persist : true } }
+      #   ]
+      # }
     }
 
     CRVStatusDQM : {
@@ -69,6 +83,7 @@ physics : {
       nBinsErrorsPerSubrun : 100
       maxErrorsPerSubrun   : 10000.0
       fillLivePlots        : false
+      # see the segmentation note under CRVDigiDQM above
     }
   }
 

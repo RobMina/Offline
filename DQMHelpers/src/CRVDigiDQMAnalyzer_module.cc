@@ -6,6 +6,7 @@
 #include "Offline/DataProducts/inc/CRSScintillatorBarIndex.hh"
 #include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DQMHelpers/inc/CRVDigiDQM.hh"
+#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/GeometryService/inc/GeometryService.hh"
 #include "Offline/RecoDataProducts/inc/CrvDigi.hh"
@@ -16,10 +17,12 @@
 #include "art/Framework/Principal/Event.h"
 #include "art/Framework/Principal/Handle.h"
 #include "art/Framework/Principal/Run.h"
+#include "art/Framework/Principal/SubRun.h"
 #include "art_root_io/TFileDirectory.h"
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
+#include "fhiclcpp/types/OptionalDelegatedParameter.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -78,7 +81,7 @@ public:
         Name("avgGraphPoints"), Comment("Max points in g_digisAvgVsEwt"), 1000};
     fhicl::Atom<int> channelsWindowEwts{
         Name("channelsWindowEwts"),
-        Comment("EWT span for h1_channelsLastEwt"),
+        Comment("Default window span for a segmentation rule that names none"),
         50000};
     fhicl::Atom<bool> fillInclusive{
         Name("fillInclusive"),
@@ -112,6 +115,10 @@ public:
         Name("histDigisEnd"),
         Comment("High edge for crvDigisPerChannelAndEvent_CRVsector*"),
         0.1};
+    fhicl::OptionalDelegatedParameter segmentation{
+        Name("segmentation"),
+        Comment("Which histograms get per-subrun / last-N-events copies. "
+                "Omit for job-only; see Offline/DQMHelpers/README.md")};
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -120,6 +127,8 @@ public:
 
   void beginJob() override;
   void beginRun(const art::Run& run) override;
+  void beginSubRun(const art::SubRun& subrun) override;
+  void endSubRun(const art::SubRun& subrun) override;
   void analyze(const art::Event& event) override;
   void endJob() override;
 
@@ -163,6 +172,7 @@ CRVDigiDQM::Config CRVDigiDQMAnalyzer::makeHelperConfig(const Config& conf)
   c.fillCrvIdRates = conf.fillCrvIdRates();
   c.kppReadout = conf.kppReadout();
   c.fillLivePlots = conf.fillLivePlots();
+  c.segmentation = parseSegmentation(conf.segmentation);
   return c;
 }
 
@@ -216,6 +226,17 @@ void CRVDigiDQMAnalyzer::beginRun(const art::Run&)
 
   dqm_.BookSectorOccupancy(sectorNames, channelToSector,
                            histDigisBins_, histDigisStart_, histDigisEnd_);
+}
+
+void CRVDigiDQMAnalyzer::beginSubRun(const art::SubRun& subrun)
+{
+  dqm_.BeginSubRun(static_cast<int>(subrun.run()),
+                   static_cast<int>(subrun.subRun()));
+}
+
+void CRVDigiDQMAnalyzer::endSubRun(const art::SubRun&)
+{
+  dqm_.EndSubRun();
 }
 
 void CRVDigiDQMAnalyzer::analyze(const art::Event& event)

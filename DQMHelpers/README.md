@@ -75,10 +75,11 @@ maps are stored as **raw counts**. After `hadd`,
 rate = content / nEvents->GetBinContent(1)
 ```
 
-TGraphs vs EWT or subrun, and `*LastEwt` rolling snapshots, are live-monitor
-objects (`fillLivePlots: true` in the online modules). They are not booked by
-the offline analyzers or the collector, so they are not in the files that get
-`hadd`'d.
+TGraphs vs EWT or subrun are live-monitor objects (`fillLivePlots: true` in the
+online modules). They are not booked by the offline analyzers or the collector, so
+they are not in the files that get `hadd`'d. Rolling-window and in-progress-subrun
+histogram copies are the same kind of object; see **Histogram segmentation** for
+which segment copies do and do not combine.
 
 ### Per-sector occupancy
 
@@ -104,6 +105,145 @@ because of a preference: digis and ROC status come off a raw/dig file, while
 coincidence clusters exist only after reco. It also needs `Services.Reco` for
 `fillSectorMPV`, which `CRVDQM.fcl` deliberately does without.
 
+## Histogram segmentation
+
+Online and offline want different things from the same fill path: online wants some
+histograms integrated over the run, some showing only the last N events, and older
+segments kept around; offline wants histograms that survive `hadd`. That choice is
+made **entirely in FHiCL**, so online can change it between runs without a rebuild.
+
+Every histogram the three helpers book goes through `mu2e::DQMSegmentation`. A rule
+list keyed on the histogram name decides which copies exist:
+
+| Mode | Copy | Reset | `hadd`-safe |
+|---|---|---|---|
+| `job` | the histogram as it has always been, unsuffixed name | never | yes |
+| `subrun` | a live copy for the subrun in progress, plus archived copies of previous subruns | each subrun | archived copies: **yes** |
+| `window` | a rolling copy of the last N events / EWTs, plus archived copies of previous spans | rolling | no |
+
+**The default is `job` only**, so a job with no `segmentation` block writes exactly
+what it wrote before this existed — same names, same titles, same objects. Nothing
+downstream (the KPP extractor, `hadd`) has to change.
+
+### Names
+
+For a histogram `B` booked in directory `D`:
+
+```text
+D/B                                  job copy -- name unchanged
+D/B_sub                              subrun in progress (live, resets)
+D/bySubrun/B_r001234_s000007         archived subrun, named by real run/subrun
+D/B_last                             live rolling window (`liveName` overrides)
+D/segments/B_prev1 ... B_prevK       previous complete spans, _prev1 newest
+```
+
+Names are fixed at booking time and **content shifts through them**, so the online
+GUI and `HistoSender` can subscribe to a name that will still be there next span.
+
+### Labels
+
+A copy that does not say what it covers is worse than no copy, so each one carries
+its range twice:
+
+- in the **title**, inserted before the first `;` so the axis labels survive:
+  `Channel occupancy [last 50000 EWT: 1234501-1284500, 4321 events];Global channel ID;Hits`
+- in a **`TNamed("dqmSegment", ...)`** in the histogram's list of functions, so the
+  range travels with the object through `HistoSender` without the directory around
+  it: `mode=window;index=1;firstEvent=...;lastEvent=...;nEvents=...;firstClock=...;`
+  `lastClock=...;run=...;subrun=...;complete=1`
+
+Both are rewritten at every rotation and once more at end of job, so a partly filled
+live copy never advertises a full span. A histogram with **only** a job copy is left
+alone: there is no sibling to confuse it with, and annotating it would change the
+output of an unconfigured job.
+
+### The rolling window
+
+`window` keeps a ring of `subdivisions` sub-blocks of `span/subdivisions` units each.
+Every entry goes into the current sub-block *and* into the live copy, so the live copy
+is exact and never lags. On rotation the live copy is rebuilt by summing the ring --
+re-summing rather than subtracting the evicted block, which is what keeps the bin
+errors and the entry count right (the hand-rolled `AddBinContent` deques this replaces
+got both wrong).
+
+So the live copy covers between `span*(S-1)/S` and `span` units. It is quantized, and
+the realised range is in the title. `subdivisions : 1` degenerates to disjoint blocks
+at no extra memory. Memory is `subdivisions + keep + 1` clones of that histogram --
+which is why the policy is per histogram and not global: do not put a `window` rule on
+`timing_fpga/*`.
+
+`unit` is `event`, `ewt` or `subrun`. `ewt` is the online convention (it is what
+`h1_channelsLastEwt` always meant); `event` is the plain last-N-events window. On MC,
+where `CrvStatus` is empty and there is no event window tag, an `ewt` rule falls back
+to counting events and says so once.
+
+### hadd
+
+Job copies and `bySubrun/` copies add correctly -- the latter carry the real run and
+subrun in the name, so two files coexist rather than collide, and two jobs over the
+same subrun add. `_sub`, `_last` and `segments/_prev*` are **job-local ranges** and do
+not combine; either leave `window` modes off offline, or set `persist : false` so the
+copies live in memory for the online GUI and are never written. That is the same
+distinction `fillLivePlots` draws for the TGraphs.
+
+### Configuration
+
+Every field, with what it does:
+
+```fcl
+segmentation : {
+  annotateTitles : true          # append the range tag to every copy's title
+  stampMetadata  : true          # add the dqmSegment TNamed to every copy
+  subrunDir      : "bySubrun"    # subdirectory for archived subrun copies
+  segmentDir     : "segments"    # subdirectory for archived window copies
+
+  # First matching rule wins. `match` is a glob (* and ?) over the
+  # directory-qualified histogram path, so "timing_fpga/*" takes a whole
+  # subdirectory. An unmatched histogram gets job-only.
+  rules : [
+    { match       : "h1_channels"
+      enabled     : true         # false: do not book the histogram at all
+      modes       : [ "job", "window" ]
+      job         : { persist : true }
+      window      : { span         : 50000   # width of one span
+                      unit         : "ewt"   # "event" | "ewt" | "subrun"
+                      subdivisions : 10      # ring depth; 1 = disjoint blocks
+                      keep         : 4       # archived previous spans
+                      persist      : false   # write the _prevN copies
+                      persistLive  : false } # write the _last copy
+      liveName    : "h1_channelsLastEwt"     # name for the live window copy
+    }
+
+    { match   : "dtOutOfRangePerFeb"
+      modes   : [ "job", "subrun" ]
+      subrun  : { keep        : -1           # -1 = every subrun, N = last N
+                  persist     : true         # write the archived copies
+                  persistLive : false }      # write the in-progress copy
+    }
+
+    { match : "timing_fpga/*"  modes : [ "job" ] }
+  ]
+}
+```
+
+Unknown keys, unknown modes and unknown units **throw**. A mistyped rule that quietly
+does nothing is worse online than a job that refuses to start.
+
+`subrun.keep` bounds the in-memory history. A copy already written to the file is what
+`persist : true` asked for, so it is never dropped.
+
+The parser (`parseSegmentation`, `DQMHelpers/inc/DQMSegmentationConfig.hh`) is shared:
+the offline analyzers hand it a delegated FHiCL block, the otsdaq modules hand it
+`ps.get<fhicl::ParameterSet>("segmentation")`. One grammar, no chance of the two
+drifting.
+
+`CRVDigiDQM::Config::channelsWindowEwts` is the helper's own default span, applied to
+any `window` rule that does not name a `span` of its own.
+
+The `crvPEsMPV*` maps are filled once at end of job from the per-channel fits rather
+than per event, so job / subrun / window copies of them would be identical. They stay
+outside the registry.
+
 ## CRVDigiDQM
 
 `mu2e::CRVDigiDQM` books and fills every live digi histogram from
@@ -116,7 +256,9 @@ Typical use from an art module:
 ```cpp
 CRVDigiDQM dqm(config);          // constructor / beginJob
 dqm.Book(tfs->mkdir("CRVDigiDQM"));
+dqm.BeginSubRun(run, subrun);    // beginSubRun, if a subrun rule is configured
 dqm.Fill(*digis, *status);       // analyze, once per event
+dqm.EndSubRun();                 // endSubRun
 dqm.WriteGraphs();               // endJob (sector occupancy + persist TGraphs if booked)
 ```
 
@@ -141,9 +283,8 @@ size only — it does **no** ROC remapping.
 
 `kppReadout: true` sizes for KPP, the extracted CRV and the only one built so
 far: ROC 1-2, FEBs numbered `(roc-1)*25 + feb`, and `h1_channels` /
-`h2_channels` booked over 33 FEB slots (`h1_channelsLastEwt` only when
-`fillLivePlots` is true). Every existing dataset wants this mode, which is why
-it is the default here and in `prolog_v12.fcl`.
+`h2_channels` booked over 33 FEB slots. Every existing dataset wants this mode,
+which is why it is the default here and in `prolog_v12.fcl`.
 
 `kppReadout: false` is the full CRV, which does not exist yet — a seam for when
 it does, not a mode anything runs in today. The occupancy trio is **not booked**
@@ -157,9 +298,10 @@ reach the helper with the correct ROC already. Re-folding would duplicate a
 DAQ-level mapping and silently mask an unpacker configured without it; instead a
 ROC 4 arriving here lands off-axis and raises the warning below.
 
-`h1_channelsLastEwt`, the rolling EWT-window occupancy, is booked only with
-`fillLivePlots` and has no full-CRV equivalent. Irrelevant while KPP is the
-only CRV that exists.
+`h1_channelsLastEwt` is now a `window` rule on `h1_channels` rather than a
+histogram of its own -- see **Histogram segmentation** above. The online FCL keeps
+the name with `liveName`. It has no full-CRV equivalent, which is irrelevant while
+KPP is the only CRV that exists.
 
 `dtVsFeb` is booked in both modes; its x-axis follows the same geography
 (`nFebIdBins()`) so it stays legible rather than reserving 450 bins for FEBs
@@ -209,14 +351,8 @@ This is the only logging the helper does.
 An off-scale `dt` is a physics observation, not a misconfiguration, so it is
 counted rather than logged. `dtOutOfRangePerFeb` is on the same `globalFebId`
 axis as `dtVsFeb`, counting events in which that FEB had `abs(dt) > dtVsFebRange`
-over the whole job. With `fillLivePlots`, `dtOutOfRangePerFebLastEwt` is the
-rolling `channelsWindowEwts` twin for the online monitor.
-
-A FEB whose clock has slipped shows a bar standing above its neighbours. The
-rolling twin exists so a slip that starts now is not diluted by hours of earlier
-good data; it shares the deque-and-`AddBinContent` mechanism used by
-`h1_channelsLastEwt`, so like it it carries bin content without entry counts and
-only updates on events that carry an EWT (i.e. not MC).
+over the whole job. A `window` rule on it gives the online monitor the rolling
+twin, so a slip that starts now is not diluted by hours of earlier good data.
 
 A FEB contributes at most one entry per event, and only when it has a digi
 passing `cfTime` (>= 3 samples, `peak - adcs[0] >= minAmplitude`, a leading-edge
@@ -245,7 +381,9 @@ directory, so the KPP extractor keeps reading them where it always has.
 CRVRecoDQM dqm(config);              // constructor / beginJob
 dqm.Book(tfs->mkdir("CRVRecoDQM"));  // or *tfs, to book in the module directory
 dqm.BookSectorMPV(sectorNames, channelToSector);   // once, optional
+dqm.BeginSubRun(run, subrun);        // beginSubRun, if a subrun rule is configured
 dqm.Fill(*clusters, *recoPulses);    // analyze, once per event
+dqm.EndSubRun();                     // endSubRun
 dqm.WriteGraphs();                   // endJob: runs the fits, fills the MPV maps
 ```
 
@@ -383,6 +521,7 @@ Typical use:
 ```cpp
 CRVStatusDQM dqm(config);
 dqm.Book(tfs->mkdir("CRVStatusDQM"));
+dqm.BeginSubRun(run, subrun);    // beginSubRun
 dqm.Fill(*status, *daqErrors);   // analyze
 dqm.EndSubRun(run, subrun);      // endSubRun
 dqm.WriteGraphs();               // endJob
@@ -443,9 +582,20 @@ and fills the rest (one warning per job). `fillSectorMPV` is the
 `otsdaq-mu2e-crv` `CrvDQM_module.cc` (`feature/CRVDigiDQM`, based on
 `mu2e/ots_ops`) constructs a `mu2e::CRVDigiDQM` member with
 `Config::fillInclusive = false` and `Config::fillLivePlots = true`, calls
-`Book`/`Fill`/`WriteGraphs`, and links `Offline::DQMHelpers`. The module still
-owns `h1_dummy`, `HistoSender`, `THttpServer`/`TCanvas`/`CrvDQMStyle`, rate-log
-counters, and the per-FEB timing summary canvases.
+`Book`/`BeginSubRun`/`Fill`/`EndSubRun`/`WriteGraphs`, and links
+`Offline::DQMHelpers`. The module still owns `h1_dummy`, `HistoSender`,
+`THttpServer`/`TCanvas`/`CrvDQMStyle`, rate-log counters, and the per-FEB timing
+summary canvases.
+
+Its `segmentation` block goes through the same `parseSegmentation` the offline
+analyzers use, from `ps.get<fhicl::ParameterSet>("segmentation", {})`. `Send()`
+ships **every** copy the block created, keyed on the histogram's own name, so a
+newly configured segment reaches the GUI without a change in C++.
+`h1_channelsLastEwt` and `dtOutOfRangePerFebLastEwt` are now `window` rules with
+`liveName` set to those names, rather than histograms of their own; the module
+reaches them through `dqm_.segments().live("h1_channels")`. Worked examples,
+with every field annotated and three ready-made presets, are in
+`otsdaq-mu2e-crv/fcl/CrvDQM_segmentation_examples.fcl`.
 
 The DAQ build must pick up an Offline that contains `DQMHelpers` (the
 `off_dqm` checkout, or a later Offline tag). Constant-fraction timing
@@ -458,7 +608,8 @@ Binning FHiCL defaults in `CRVDigiDQM::Config` match the online
 ## otsdaq CrvStatusMetrics
 
 `otsdaq-mu2e-crv` `CrvStatusMetrics_module.cc` constructs a
-`mu2e::CRVStatusDQM` member with `fillLivePlots = true`, prefers
+`mu2e::CRVStatusDQM` member with `fillLivePlots = true`, takes the same
+`segmentation` block, prefers
 `CrvStatus`/`CrvDAQerror` products, and still publishes the five LastPoint
 series. If the status product is absent it falls back to DTC-fragment decode
 for LastPoint only. `HistoSender` ships `errorBitsVsRoc` (and the other status

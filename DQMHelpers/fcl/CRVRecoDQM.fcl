@@ -65,6 +65,12 @@ physics : {
       maxZ                     : 20000.0
       # needs GeometryService, which the services block above provides
       fillSectorMPV            : true
+
+      # Histogram segmentation. Omitted, so every histogram gets exactly one
+      # job-integrated copy that hadds. Per-subrun copies are the one segmented
+      # mode that is also hadd-safe. The crvPEsMPV* maps are filled once at end
+      # of job from the per-channel fits, so they are never segmented.
+      # Grammar and a fully annotated example: Offline/DQMHelpers/README.md.
     }
   }
 

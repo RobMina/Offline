@@ -37,6 +37,9 @@ BEGIN_PROLOG
       fillInclusiveRecoDQM                   : true   # per-event DqmCrv reco-pulse and cluster plots
       crvDigiDQMkppReadout                   : true   # KPP FEB-axis sizing (ROC 1-2)
       writePerChannelPE                      : false  # ~50k per-channel PE spectra; expert output
+      # segmentation : { ... }  # per-subrun / last-N-events histogram copies.
+      # Omitted, so every histogram gets one job-integrated copy that hadds.
+      # Grammar: Offline/DQMHelpers/README.md
     }
 
     CrvRecoPulses:

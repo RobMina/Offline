@@ -3,6 +3,7 @@
 // Original Author: R. Mina
 
 #include "Offline/DQMHelpers/inc/CRVStatusDQM.hh"
+#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/RecoDataProducts/inc/CrvDAQerror.hh"
 #include "Offline/RecoDataProducts/inc/CrvStatus.hh"
 
@@ -15,6 +16,7 @@
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
+#include "fhiclcpp/types/OptionalDelegatedParameter.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -72,6 +74,10 @@ public:
         Name("fillLivePlots"),
         Comment("Book TGraphs vs subrun (online only; not hadd-safe)"),
         false};
+    fhicl::OptionalDelegatedParameter segmentation{
+        Name("segmentation"),
+        Comment("Which histograms get per-subrun / last-N-events copies. "
+                "Omit for job-only; see Offline/DQMHelpers/README.md")};
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -80,6 +86,7 @@ public:
 
   void beginJob() override;
   void analyze(const art::Event& event) override;
+  void beginSubRun(const art::SubRun& subrun) override;
   void endSubRun(const art::SubRun& subrun) override;
   void endJob() override;
 
@@ -109,6 +116,7 @@ CRVStatusDQM::Config CRVStatusDQMAnalyzer::makeHelperConfig(const Config& conf)
   c.nBinsErrorsPerSubrun = std::max(conf.nBinsErrorsPerSubrun(), 1);
   c.maxErrorsPerSubrun = conf.maxErrorsPerSubrun();
   c.fillLivePlots = conf.fillLivePlots();
+  c.segmentation = parseSegmentation(conf.segmentation);
   return c;
 }
 
@@ -169,6 +177,12 @@ void CRVStatusDQMAnalyzer::analyze(const art::Event& event)
               << " nStatus=" << status.size()
               << " nRocSnap=" << dqm_.lastEventRocs().size() << std::endl;
   }
+}
+
+void CRVStatusDQMAnalyzer::beginSubRun(const art::SubRun& subrun)
+{
+  dqm_.BeginSubRun(static_cast<int>(subrun.run()),
+                   static_cast<int>(subrun.subRun()));
 }
 
 void CRVStatusDQMAnalyzer::endSubRun(const art::SubRun& subrun)

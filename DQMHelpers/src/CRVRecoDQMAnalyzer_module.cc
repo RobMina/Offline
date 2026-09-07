@@ -6,6 +6,7 @@
 #include "Offline/DataProducts/inc/CRSScintillatorBarIndex.hh"
 #include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DQMHelpers/inc/CRVRecoDQM.hh"
+#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/GeometryService/inc/GeometryService.hh"
 #include "Offline/RecoDataProducts/inc/CrvCoincidenceCluster.hh"
@@ -16,10 +17,12 @@
 #include "art/Framework/Principal/Event.h"
 #include "art/Framework/Principal/Handle.h"
 #include "art/Framework/Principal/Run.h"
+#include "art/Framework/Principal/SubRun.h"
 #include "art_root_io/TFileDirectory.h"
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
+#include "fhiclcpp/types/OptionalDelegatedParameter.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -108,6 +111,10 @@ public:
         Name("fillSectorMPV"),
         Comment("Fill per-sector crvPEsMPV_CRVsector* using GeometryService"),
         false};
+    fhicl::OptionalDelegatedParameter segmentation{
+        Name("segmentation"),
+        Comment("Which histograms get per-subrun / last-N-events copies. "
+                "Omit for job-only; see Offline/DQMHelpers/README.md")};
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -116,6 +123,8 @@ public:
 
   void beginJob() override;
   void beginRun(const art::Run& run) override;
+  void beginSubRun(const art::SubRun& subrun) override;
+  void endSubRun(const art::SubRun& subrun) override;
   void analyze(const art::Event& event) override;
   void endJob() override;
 
@@ -158,6 +167,7 @@ CRVRecoDQM::Config CRVRecoDQMAnalyzer::makeHelperConfig(const Config& conf)
   c.maxY = conf.maxY();
   c.minZ = conf.minZ();
   c.maxZ = conf.maxZ();
+  c.segmentation = parseSegmentation(conf.segmentation);
   return c;
 }
 
@@ -181,6 +191,17 @@ void CRVRecoDQMAnalyzer::beginJob()
   } else {
     dqm_.Book(tfs->mkdir(outputTag_));
   }
+}
+
+void CRVRecoDQMAnalyzer::beginSubRun(const art::SubRun& subrun)
+{
+  dqm_.BeginSubRun(static_cast<int>(subrun.run()),
+                   static_cast<int>(subrun.subRun()));
+}
+
+void CRVRecoDQMAnalyzer::endSubRun(const art::SubRun&)
+{
+  dqm_.EndSubRun();
 }
 
 void CRVRecoDQMAnalyzer::beginRun(const art::Run&)
