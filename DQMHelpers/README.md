@@ -212,6 +212,8 @@ segmentation : {
                       persist      : false   # write the _prevN copies
                       persistLive  : false } # write the _last copy
       liveName    : "h1_channelsLastEwt"     # name for the live window copy
+      publish     : true                     # hand its copies to the consumer
+      group       : ""                       # collect them under one label
     }
 
     { match   : "dtOutOfRangePerFeb"
@@ -229,13 +231,73 @@ segmentation : {
 Unknown keys, unknown modes and unknown units **throw**. A mistyped rule that quietly
 does nothing is worse online than a job that refuses to start.
 
+### Publishing
+
+`publish` and `group` decide what a consumer gets, so that too is FHiCL rather than
+a list compiled into a module:
+
+```cpp
+for (const auto& [group, copies] : dqm.segments().publishedCopies()) { ... }
+```
+
+`publishedCopies()` returns every copy of every histogram whose rule set
+`publish`, collected under that rule's `group`. A rule with no `group` gives each
+copy an entry of its own keyed on the copy's object name -- so a live window copy
+named by `liveName` is published under that name, which is what a GUI subscribing
+to a fixed name needs.
+
+The registry does not know what a group **means**. It is an opaque label, and the
+caller decides whether it is an otsdaq `HistoSender` folder, a web tab or something
+else. That is deliberate: it is what lets `DQMHelpers` build inside the DAQ process
+without knowing `HistoSender` exists, and it keeps the otsdaq naming convention
+(`crv/<group>:replace`) in the otsdaq module where it belongs.
+
+Nothing is published by default. Publishing a large histogram costs bandwidth on
+every send interval, so the choice is explicit -- but it is now a FHiCL line rather
+than a rebuild.
+
 `subrun.keep` bounds the in-memory history. A copy already written to the file is what
 `persist : true` asked for, so it is never dropped.
 
 The parser (`parseSegmentation`, `DQMHelpers/inc/DQMSegmentationConfig.hh`) is shared:
-the offline analyzers hand it a delegated FHiCL block, the otsdaq modules hand it
+the offline analyzers and `CrvDQMcollector` hand it a delegated FHiCL block,
+the otsdaq modules hand it
 `ps.get<fhicl::ParameterSet>("segmentation")`. One grammar, no chance of the two
 drifting.
+
+### One module, three helpers
+
+A rule glob is matched against the histogram path **relative to that helper's own
+directory**, so a single block cannot tell two helpers' identically named
+histograms apart -- and `nEvents` exists in all three CRV helpers. The same is true
+of the helpers' other parameters: `fillInclusive` is in both the digi and reco
+configs, `fillLivePlots` in both the digi and status ones.
+
+`CrvDQMcollector` therefore configures each helper under its own key, and each
+block carries that helper's own `segmentation`:
+
+```fcl
+CrvDQMcollector : {
+  crvDigiModuleLabel : "CrvDigi"          # module-level: labels, directories
+  crvDigiDQMDir      : "CRVDigiDQM"
+  ...
+  crvDigiDQM   : { kppReadout : true   segmentation : { rules : [ ... ] } }
+  crvRecoDQM   : { minY : 3500.0       segmentation : { rules : [ ... ] } }
+  crvStatusDQM : { nBinsLatency : 1024 segmentation : { rules : [ ... ] } }
+}
+```
+
+The atoms those blocks accept are declared once, as `CRVDigiDQMFhicl` and friends,
+in the same header as the `Config` they mirror, with every **default read from that
+`Config`** -- so a binning default lives in exactly one place rather
+than being repeated in the struct, in each module's atom list, and in the online
+`ps.get` call and kept equal by hand.
+
+A module owning a single helper has no collision to resolve and can splice the
+same atoms in flat with `fhicl::TableFragment`, leaving its FCL unnested.
+
+The otsdaq modules own one helper each, so they take a single `segmentation` block
+and need none of this.
 
 `CRVDigiDQM::Config::channelsWindowEwts` is the helper's own default span, applied to
 any `window` rule that does not name a `span` of its own.

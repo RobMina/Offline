@@ -3,7 +3,6 @@
 // Original Author: R. Mina
 
 #include "Offline/DQMHelpers/inc/CRVStatusDQM.hh"
-#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/RecoDataProducts/inc/CrvDAQerror.hh"
 #include "Offline/RecoDataProducts/inc/CrvStatus.hh"
 
@@ -16,7 +15,7 @@
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
-#include "fhiclcpp/types/OptionalDelegatedParameter.h"
+#include "fhiclcpp/types/TableFragment.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -46,38 +45,10 @@ public:
         ""};
     fhicl::Atom<int> diagLevel{Name("diagLevel"), Comment("Diagnostic level"), 0};
 
-    fhicl::Atom<int> nBinsLatency{
-        Name("nBinsLatency"), Comment("Bins for linkLatency"), 1024};
-    fhicl::Atom<float> maxLinkLatency{
-        Name("maxLinkLatency"), Comment("Upper edge for linkLatency"), 4096.f};
-    fhicl::Atom<int> nBinsTriggerCount{
-        Name("nBinsTriggerCount"), Comment("Bins for triggerCount"), 256};
-    fhicl::Atom<float> maxTriggerCount{
-        Name("maxTriggerCount"), Comment("Upper edge for triggerCount"), 65535.f};
-    fhicl::Atom<int> nBinsWordCount{
-        Name("nBinsWordCount"), Comment("Bins for wordCount"), 256};
-    fhicl::Atom<float> maxWordCount{
-        Name("maxWordCount"), Comment("Upper edge for wordCount"), 65535.f};
-    fhicl::Atom<int> nBinsEwtMismatch{
-        Name("nBinsEwtMismatch"), Comment("Bins for ewtMismatch"), 201};
-    fhicl::Atom<float> maxEwtMismatch{
-        Name("maxEwtMismatch"), Comment("Abs range for ewtMismatch"), 100.f};
-    fhicl::Atom<int> nBinsErrorsPerSubrun{
-        Name("nBinsErrorsPerSubrun"),
-        Comment("Bins for errorsPerSubrun"),
-        100};
-    fhicl::Atom<float> maxErrorsPerSubrun{
-        Name("maxErrorsPerSubrun"),
-        Comment("Upper edge for errorsPerSubrun (error events in a subrun)"),
-        10000.f};
-    fhicl::Atom<bool> fillLivePlots{
-        Name("fillLivePlots"),
-        Comment("Book TGraphs vs subrun (online only; not hadd-safe)"),
-        false};
-    fhicl::OptionalDelegatedParameter segmentation{
-        Name("segmentation"),
-        Comment("Which histograms get per-subrun / last-N-events copies. "
-                "Omit for job-only; see Offline/DQMHelpers/README.md")};
+    // Every parameter the helper itself takes, spliced in at this level so
+    // the FCL stays flat and the atoms and their defaults live once, beside
+    // the Config they fill (CRVStatusDQMFhicl, in the helper header).
+    fhicl::TableFragment<CRVStatusDQMFhicl> helper;
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -104,20 +75,7 @@ private:
 
 CRVStatusDQM::Config CRVStatusDQMAnalyzer::makeHelperConfig(const Config& conf)
 {
-  CRVStatusDQM::Config c;
-  c.nBinsLatency = std::max(conf.nBinsLatency(), 1);
-  c.maxLinkLatency = conf.maxLinkLatency();
-  c.nBinsTriggerCount = std::max(conf.nBinsTriggerCount(), 1);
-  c.maxTriggerCount = conf.maxTriggerCount();
-  c.nBinsWordCount = std::max(conf.nBinsWordCount(), 1);
-  c.maxWordCount = conf.maxWordCount();
-  c.nBinsEwtMismatch = std::max(conf.nBinsEwtMismatch(), 1);
-  c.maxEwtMismatch = conf.maxEwtMismatch();
-  c.nBinsErrorsPerSubrun = std::max(conf.nBinsErrorsPerSubrun(), 1);
-  c.maxErrorsPerSubrun = conf.maxErrorsPerSubrun();
-  c.fillLivePlots = conf.fillLivePlots();
-  c.segmentation = parseSegmentation(conf.segmentation);
-  return c;
+  return toConfig(conf.helper());
 }
 
 CRVStatusDQMAnalyzer::CRVStatusDQMAnalyzer(const Parameters& conf) :

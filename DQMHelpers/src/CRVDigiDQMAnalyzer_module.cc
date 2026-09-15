@@ -6,7 +6,6 @@
 #include "Offline/DataProducts/inc/CRSScintillatorBarIndex.hh"
 #include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DQMHelpers/inc/CRVDigiDQM.hh"
-#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/GeometryService/inc/GeometryService.hh"
 #include "Offline/RecoDataProducts/inc/CrvDigi.hh"
@@ -22,7 +21,7 @@
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
-#include "fhiclcpp/types/OptionalDelegatedParameter.h"
+#include "fhiclcpp/types/TableFragment.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -53,52 +52,11 @@ public:
         ""};
     fhicl::Atom<int> diagLevel{Name("diagLevel"), Comment("Diagnostic level"), 0};
 
-    fhicl::Atom<int> nBinsDigisPerEvt{
-        Name("nBinsDigisPerEvt"), Comment("Bins for h1_digisPerEvt"), 200};
-    fhicl::Atom<float> maxDigisPerEvt{
-        Name("maxDigisPerEvt"), Comment("Upper edge for h1_digisPerEvt"), 4000.f};
-    fhicl::Atom<int> nBinsPeakAdc{
-        Name("nBinsPeakAdc"), Comment("Bins for h1_peakAdc"), 450};
-    fhicl::Atom<float> maxPeakAdc{
-        Name("maxPeakAdc"), Comment("Upper edge for h1_peakAdc"), 4500.f};
-    fhicl::Atom<int> nBinsTdc{Name("nBinsTdc"), Comment("Bins for h1_tdc"), 400};
-    fhicl::Atom<float> maxTdc{Name("maxTdc"), Comment("Upper edge for h1_tdc"), 40000.f};
-    fhicl::Atom<double> cfFraction{
-        Name("cfFraction"), Comment("Constant-fraction timing threshold"), 0.20};
-    fhicl::Atom<float> dtBinSize{
-        Name("dtBinSize"), Comment("CF dt histogram bin width [ns]"), 0.5f};
-    fhicl::Atom<float> dtRange{
-        Name("dtRange"), Comment("CF dt histogram +/- range [ns]"), 100.f};
-    fhicl::Atom<float> dtVsFebBinSize{
-        Name("dtVsFebBinSize"), Comment("dtVsFeb bin width [ns]"), 2.f};
-    fhicl::Atom<float> dtVsFebRange{
-        Name("dtVsFebRange"), Comment("dtVsFeb +/- range [ns]"), 500.f};
-    fhicl::Atom<int> minAmplitude{
-        Name("minAmplitude"), Comment("Minimum CF amplitude (peak-baseline)"), 10};
-    fhicl::Atom<int> avgBlockSize{
-        Name("avgBlockSize"), Comment("Events per g_digisAvgVsEwt point"), 30};
-    fhicl::Atom<int> avgGraphPoints{
-        Name("avgGraphPoints"), Comment("Max points in g_digisAvgVsEwt"), 1000};
-    fhicl::Atom<int> channelsWindowEwts{
-        Name("channelsWindowEwts"),
-        Comment("Default window span for a segmentation rule that names none"),
-        50000};
-    fhicl::Atom<bool> fillInclusive{
-        Name("fillInclusive"),
-        Comment("Also fill ValCrvDigi BarId/SiPM/ADC histograms"),
-        true};
-    fhicl::Atom<bool> fillCrvIdRates{
-        Name("fillCrvIdRates"),
-        Comment("Book CRVId occupancy maps and crvDigisPerChannel"),
-        true};
-    fhicl::Atom<bool> kppReadout{
-        Name("kppReadout"),
-        Comment("KPP FEB-axis sizing (ROC 1-2); ROC4->ROC2 is the unpacker's job"),
-        true};
-    fhicl::Atom<bool> fillLivePlots{
-        Name("fillLivePlots"),
-        Comment("Book TGraphs vs EWT and *LastEwt snapshots (online only; not hadd-safe)"),
-        false};
+    // Every parameter the helper itself takes, spliced in at this level so
+    // the FCL stays flat and the atoms and their defaults live once, beside
+    // the Config they fill (CRVDigiDQMFhicl, in the helper header).
+    fhicl::TableFragment<CRVDigiDQMFhicl> helper;
+
     fhicl::Atom<bool> fillSectorOccupancy{
         Name("fillSectorOccupancy"),
         Comment("Fill per-sector crvDigisPerChannelAndEvent_* using GeometryService"),
@@ -115,10 +73,6 @@ public:
         Name("histDigisEnd"),
         Comment("High edge for crvDigisPerChannelAndEvent_CRVsector*"),
         0.1};
-    fhicl::OptionalDelegatedParameter segmentation{
-        Name("segmentation"),
-        Comment("Which histograms get per-subrun / last-N-events copies. "
-                "Omit for job-only; see Offline/DQMHelpers/README.md")};
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -151,29 +105,7 @@ private:
 
 CRVDigiDQM::Config CRVDigiDQMAnalyzer::makeHelperConfig(const Config& conf)
 {
-  CRVDigiDQM::Config c;
-  c.nBinsDigisPerEvt = conf.nBinsDigisPerEvt();
-  c.maxDigisPerEvt = conf.maxDigisPerEvt();
-  c.nBinsPeakAdc = conf.nBinsPeakAdc();
-  c.maxPeakAdc = conf.maxPeakAdc();
-  c.nBinsTdc = conf.nBinsTdc();
-  c.maxTdc = conf.maxTdc();
-  c.cfFraction = conf.cfFraction();
-  c.dtBinSize = conf.dtBinSize();
-  c.dtRange = conf.dtRange();
-  c.dtVsFebBinSize = conf.dtVsFebBinSize();
-  c.dtVsFebRange = conf.dtVsFebRange();
-  c.minAmplitude = conf.minAmplitude();
-  c.avgBlockSize = static_cast<std::size_t>(std::max(conf.avgBlockSize(), 1));
-  c.avgGraphPoints = static_cast<std::size_t>(std::max(conf.avgGraphPoints(), 1));
-  c.channelsWindowEwts =
-      static_cast<std::size_t>(std::max(conf.channelsWindowEwts(), 1));
-  c.fillInclusive = conf.fillInclusive();
-  c.fillCrvIdRates = conf.fillCrvIdRates();
-  c.kppReadout = conf.kppReadout();
-  c.fillLivePlots = conf.fillLivePlots();
-  c.segmentation = parseSegmentation(conf.segmentation);
-  return c;
+  return toConfig(conf.helper());
 }
 
 CRVDigiDQMAnalyzer::CRVDigiDQMAnalyzer(const Parameters& conf) :

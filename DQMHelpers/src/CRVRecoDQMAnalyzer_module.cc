@@ -6,7 +6,6 @@
 #include "Offline/DataProducts/inc/CRSScintillatorBarIndex.hh"
 #include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DQMHelpers/inc/CRVRecoDQM.hh"
-#include "Offline/DQMHelpers/inc/DQMSegmentationConfig.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/GeometryService/inc/GeometryService.hh"
 #include "Offline/RecoDataProducts/inc/CrvCoincidenceCluster.hh"
@@ -22,7 +21,7 @@
 #include "art_root_io/TFileService.h"
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/types/Atom.h"
-#include "fhiclcpp/types/OptionalDelegatedParameter.h"
+#include "fhiclcpp/types/TableFragment.h"
 #include "fhiclcpp/types/Table.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
@@ -53,68 +52,15 @@ public:
         ""};
     fhicl::Atom<int> diagLevel{Name("diagLevel"), Comment("Diagnostic level"), 0};
 
-    fhicl::Atom<int> nBinsPEs{
-        Name("nBinsPEs"), Comment("Bins for the PE spectra and the MPV hists"), 75};
-    fhicl::Atom<double> minPEs{
-        Name("minPEs"), Comment("Low edge for the PE spectra and MPV hists"), 0.0};
-    fhicl::Atom<double> maxPEs{
-        Name("maxPEs"), Comment("High edge for the PE spectra and MPV hists"), 150.0};
-    fhicl::Atom<double> PEfitRangeStart{
-        Name("PEfitRangeStart"),
-        Comment("Low end of the PE MPV fit range as a fraction of the peak"),
-        0.7};
-    fhicl::Atom<double> PEfitRangeEnd{
-        Name("PEfitRangeEnd"),
-        Comment("High end of the PE MPV fit range as a fraction of the peak"),
-        2.0};
-    fhicl::Atom<double> PEstart{
-        Name("PEstart"), Comment("Lowest PE for the fit"), 15.0};
-    fhicl::Atom<int> nSectorTypeBins{
-        Name("nSectorTypeBins"),
-        Comment("Bins for crvCoincidencesClusters (CrvSectorType axis)"),
-        10};
-    fhicl::Atom<bool> writePerChannelPE{
-        Name("writePerChannelPE"),
-        Comment("Write the ~50k per-channel PE spectra (expert output)"),
-        false};
-    fhicl::Atom<bool> fillInclusive{
-        Name("fillInclusive"),
-        Comment("Also fill the per-event DqmCrv reco-pulse and cluster plots"),
-        true};
+    // Every parameter the helper itself takes, spliced in at this level so
+    // the FCL stays flat and the atoms and their defaults live once, beside
+    // the Config they fill (CRVRecoDQMFhicl, in the helper header).
+    fhicl::TableFragment<CRVRecoDQMFhicl> helper;
 
-    // Defaults are the DqmCrv values (full CRV, Mu2e coordinates). The
-    // extracted CRV needs y/z moved or those two plots are all overflow.
-    fhicl::Atom<int> nBinsTime{
-        Name("nBinsTime"), Comment("Bins for PulseTime / LeadingTime / tc"), 100};
-    fhicl::Atom<double> minTime{
-        Name("minTime"), Comment("Low edge for PulseTime / LeadingTime / tc [ns]"), 0.0};
-    fhicl::Atom<double> maxTime{
-        Name("maxTime"), Comment("High edge for PulseTime / LeadingTime / tc [ns]"), 2000.0};
-    fhicl::Atom<int> nBinsTime2{
-        Name("nBinsTime2"),
-        Comment("Bins for the full-window PulseTime2 / LeadingTime2 / t2c"), 100};
-    fhicl::Atom<double> minTime2{
-        Name("minTime2"),
-        Comment("Low edge for PulseTime2 / LeadingTime2 / t2c [ns]"), 0.0};
-    fhicl::Atom<double> maxTime2{
-        Name("maxTime2"),
-        Comment("High edge for PulseTime2 / LeadingTime2 / t2c [ns]"), 100000.0};
-    fhicl::Atom<int> nBinsPos{
-        Name("nBinsPos"), Comment("Bins for the cluster position plots X/Y/Z"), 100};
-    fhicl::Atom<double> minX{Name("minX"), Comment("Low edge for X [mm]"), -6904.0};
-    fhicl::Atom<double> maxX{Name("maxX"), Comment("High edge for X [mm]"), -904.0};
-    fhicl::Atom<double> minY{Name("minY"), Comment("Low edge for Y [mm]"), 0.0};
-    fhicl::Atom<double> maxY{Name("maxY"), Comment("High edge for Y [mm]"), 3000.0};
-    fhicl::Atom<double> minZ{Name("minZ"), Comment("Low edge for Z [mm]"), -3500.0};
-    fhicl::Atom<double> maxZ{Name("maxZ"), Comment("High edge for Z [mm]"), 20000.0};
     fhicl::Atom<bool> fillSectorMPV{
         Name("fillSectorMPV"),
         Comment("Fill per-sector crvPEsMPV_CRVsector* using GeometryService"),
         false};
-    fhicl::OptionalDelegatedParameter segmentation{
-        Name("segmentation"),
-        Comment("Which histograms get per-subrun / last-N-events copies. "
-                "Omit for job-only; see Offline/DQMHelpers/README.md")};
   };
 
   using Parameters = art::EDAnalyzer::Table<Config>;
@@ -144,31 +90,7 @@ private:
 
 CRVRecoDQM::Config CRVRecoDQMAnalyzer::makeHelperConfig(const Config& conf)
 {
-  CRVRecoDQM::Config c;
-  c.nBinsPEs = conf.nBinsPEs();
-  c.minPEs = conf.minPEs();
-  c.maxPEs = conf.maxPEs();
-  c.PEfitRangeStart = conf.PEfitRangeStart();
-  c.PEfitRangeEnd = conf.PEfitRangeEnd();
-  c.PEstart = conf.PEstart();
-  c.nSectorTypeBins = conf.nSectorTypeBins();
-  c.writePerChannelPE = conf.writePerChannelPE();
-  c.fillInclusive = conf.fillInclusive();
-  c.nBinsTime = conf.nBinsTime();
-  c.minTime = conf.minTime();
-  c.maxTime = conf.maxTime();
-  c.nBinsTime2 = conf.nBinsTime2();
-  c.minTime2 = conf.minTime2();
-  c.maxTime2 = conf.maxTime2();
-  c.nBinsPos = conf.nBinsPos();
-  c.minX = conf.minX();
-  c.maxX = conf.maxX();
-  c.minY = conf.minY();
-  c.maxY = conf.maxY();
-  c.minZ = conf.minZ();
-  c.maxZ = conf.maxZ();
-  c.segmentation = parseSegmentation(conf.segmentation);
-  return c;
+  return toConfig(conf.helper());
 }
 
 CRVRecoDQMAnalyzer::CRVRecoDQMAnalyzer(const Parameters& conf) :
