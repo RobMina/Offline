@@ -35,6 +35,8 @@ namespace mu2e {
       fhicl::Atom<bool> bfieldCorr { Name("BFieldCorrection"), Comment("Apply correction for BField inhomogeneity") };
       fhicl::Atom<bool> ends { Name("ProcessEnds"), Comment("Process purely passive sites at the time range ends") };
       fhicl::Atom<float> btol { Name("BCorrTolerance"), Comment("Tolerance on BField correction momentum fractional accuracy (dimensionless)") };
+      fhicl::Atom<double> minDomainTimeStep { Name("MinDomainTimeStep"), Comment("Minimum BField domain time step (ns); 0 leaves it unbounded"), 0.0 };
+      fhicl::Atom<double> domainMargin { Name("DomainMargin"), Comment("Maximum time a BField domain may extend beyond the active range (ns); negative leaves domains unconfined"), -1.0 };
       // Updater settings
       using MetaIterationSettings = fhicl::Sequence<fhicl::Tuple<float,std::string>>;
       MetaIterationSettings miConfig { Name("MetaIterationSettings"), Comment("Temperature (dimensionless), StrawHitUpdater algorithm") };

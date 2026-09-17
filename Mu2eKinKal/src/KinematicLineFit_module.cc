@@ -313,7 +313,8 @@ namespace mu2e {
           // extrapolate as required
           if(goodfit && extrap_) extrap_->extrapolate(*kktrk);
           bool save = goodFit(*kktrk);
-          if(save || saveall_){
+          // a fit that failed before its trajectory was built has nothing to save
+          if((save || saveall_) && kktrk->hasTraj()){
             TrkFitFlag fitflag(hptr->status());
             fitflag.merge(TrkFitFlag::KKLine);
             sampleFit(*kktrk);

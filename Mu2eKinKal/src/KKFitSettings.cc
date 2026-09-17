@@ -22,6 +22,8 @@ namespace mu2e {
       config.bfcorr_ = fitconfig.bfieldCorr();
       config.ends_ = fitconfig.ends();
       config.tol_ = fitconfig.btol();
+      config.mindtstep_ = fitconfig.minDomainTimeStep();
+      if(fitconfig.domainMargin() >= 0.0) config.domainmargin_ = fitconfig.domainMargin(); // negative keeps KinKal's unconfined default
       // create the updaters requested
       std::vector<CADSHU::Config> cadshusettings;
       std::vector<DriftANNSHU::Config> driftannshusettings;
