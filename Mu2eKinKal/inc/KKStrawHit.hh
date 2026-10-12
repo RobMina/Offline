@@ -50,7 +50,8 @@ namespace mu2e {
       using CA = KinKal::ClosestApproach<KTRAJ,SensorLine>;
       using PCA = KinKal::PiecewiseClosestApproach<KTRAJ,SensorLine>;
       KKStrawHit(BFieldMap const& bfield, PCA const& pca,
-          ComboHit const& chit, Straw const& straw, StrawHitIndex const& shindex, StrawResponse const& sresponse);
+          ComboHit const& chit, Straw const& straw, StrawHitIndex const& shindex, StrawResponse const& sresponse,
+          bool hintpiececa=false);
       // clone op for reinstantiation
       KKStrawHit(KKStrawHit<KTRAJ> const& rhs):
           KinKal::ResidualHit<KTRAJ>(rhs),
@@ -63,7 +64,8 @@ namespace mu2e {
           chit_(rhs.hit()),
           shindex_(rhs.strawHitIndex()),
           straw_(rhs.straw()),
-          sresponse_(rhs.strawResponse()){
+          sresponse_(rhs.strawResponse()),
+          hintpiececa_(rhs.hintpiececa_){
         /**/
       };
       std::shared_ptr< KinKal::Hit<KTRAJ> > clone(CloneContext& context) const override{
@@ -122,6 +124,7 @@ namespace mu2e {
       StrawHitIndex shindex_; // index to the StrawHit
       Straw const& straw_; // reference to straw of this hit
       StrawResponse const& sresponse_; // straw calibration information
+      bool hintpiececa_; // re-reference on the piece holding the previous TPOCA, rather than following the TPOCA across pieces
       // utility functions
       void updateWHS(MetaIterConfig const& miconfig);
       // clone support
@@ -138,10 +141,11 @@ namespace mu2e {
   };
 
   template <class KTRAJ> KKStrawHit<KTRAJ>::KKStrawHit(BFieldMap const& bfield, PCA const& pca,
-      ComboHit const& chit, Straw const& straw, StrawHitIndex const& shindex, StrawResponse const& sresponse) :
+      ComboHit const& chit, Straw const& straw, StrawHitIndex const& shindex, StrawResponse const& sresponse,
+      bool hintpiececa) :
     bfield_(bfield), whstate_(WireHitState::null),
     ca_(static_cast<CA const&>(pca)),
-    chit_(chit), shindex_(shindex), straw_(straw), sresponse_(sresponse)
+    chit_(chit), shindex_(shindex), straw_(straw), sresponse_(sresponse), hintpiececa_(hintpiececa)
   {
     if(!pca.usable())whstate_.state_ = WireHitState::unusable;
     // make sure this is a single-straw based ComboHit
@@ -162,17 +166,21 @@ namespace mu2e {
     // otherwise use the time at the center of the wire, corrected for drift
     auto mtime =wire().timeAtMidpoint();
     CAHint tphint = ca_.usable() ?  ca_.hint() : CAHint(mtime-chit_.driftTime(),mtime);
-    PCA pca(ptraj,wirePtr(),tphint,precision());
+    // optionally stay on the piece holding the hint, which is the piece this hit's weight was applied to
+    auto findca = [&](CAHint const& hint) {
+      return hintpiececa_ ? CA(ptraj.nearestTraj(hint.particleToca_),wirePtr(),hint,precision())
+        : static_cast<CA>(PCA(ptraj,wirePtr(),hint,precision())); };
+    CA pca = findca(tphint);
     // check that we're on the right branch: we can move off if t0 changes a lot between iterations
     double dz = straw().origin().z() - pca.particlePoca().Z();
     double maxdz(100.0);// need a better absolute scale; should come from KTRAJ FIXME
     if((!pca.usable()) || fabs(dz) >  maxdz) {
       tphint = CAHint(Mu2eKinKal::zTime(ptraj,straw().origin().z(),mtime-chit_.driftTime()),mtime);
-      pca = PCA(ptraj,wirePtr(),tphint,precision());
+      pca = findca(tphint);
       dz = straw().origin().z() - pca.particlePoca().Z();
       if((!pca.usable()) || fabs(dz) >  maxdz) whstate_.state_ = WireHitState::unusable;// give up on 2nd try
     }
-    ca_ = static_cast<CA>(pca);
+    ca_ = pca;
   }
 
   template <class KTRAJ> void KKStrawHit<KTRAJ>::updateWHS(MetaIterConfig const& miconfig) {

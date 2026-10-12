@@ -67,6 +67,7 @@ namespace mu2e {
     struct KKFitConfig {
       fhicl::Atom<int> printLevel { Name("PrintLevel"), Comment("Diagnostic printout Level") };
       fhicl::Atom<float> tpocaPrec { Name("TPOCAPrecision"), Comment("TPOCA calculation precision (ns)") };
+      fhicl::Atom<bool> hintPieceCA { Name("StrawHitHintPieceCA"), Comment("Re-reference straw hits on the trajectory piece holding their previous TPOCA (the piece their weight was applied to) instead of following the TPOCA across pieces"), false };
       fhicl::Atom<bool> matCorr { Name("MaterialCorrection"), Comment("Correct the fit fo material effects") };
       fhicl::Atom<bool> addHits { Name("AddHits"), Comment("Add hits to the fit") };
       fhicl::Atom<bool> addMaterial { Name("AddMaterial"), Comment("Add materials to the fit") };

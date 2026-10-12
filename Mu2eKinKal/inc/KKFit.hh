@@ -146,6 +146,7 @@ namespace mu2e {
       double maxCaloDoca_; // maximum track-calo DOCA
       // straw hit creation and processing
       double tprec_; // TPOCA calculation nominal precision
+      bool hintpiececa_; // straw hits re-reference on the piece holding their previous TPOCA
       StrawHitFlag addsel_, addrej_; // selection and rejection flags when adding hits
       // parameters controlling adding hits
       float maxStrawHitDoca_, maxStrawHitDt_, maxStrawDoca_, maxStrawDocaCon_, maxStrawUposBuff_;
@@ -184,6 +185,7 @@ namespace mu2e {
     maxCaloDt_(fitconfig.maxCaloDt()),
     maxCaloDoca_(fitconfig.maxCaloDoca()),
     tprec_(fitconfig.tpocaPrec()),
+    hintpiececa_(fitconfig.hintPieceCA()),
     addsel_(fitconfig.addHitSelect()),
     addrej_(fitconfig.addHitReject()),
     maxStrawHitDoca_(fitconfig.maxStrawHitDOCA()),
@@ -245,7 +247,7 @@ namespace mu2e {
       // compute PCA between the seed trajectory and this straw
       PCA pca(ptraj, wline, hint, tprec_ );
       // create the hit.  Note these may initially be unusable
-      hits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, combohit, straw, strawidx, strawresponse));
+      hits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, combohit, straw, strawidx, strawresponse, hintpiececa_));
       // create the material crossing, including this reference
       if(matcorr_){
         auto sline = Mu2eKinKal::strawLine(straw,pca.particleToca()); // line down the straw axis center
@@ -297,7 +299,7 @@ namespace mu2e {
       CAHint hint(tshs.particleToca(),tshs.sensorToca());
       PCA pca(*ptraj, wline, hint, tprec_ );
       // create the hit.  Note these may initially be unusable
-      strawhits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, combohit, straw, tshs.index(), strawresponse)); // use original index, so the KSeed can be re-persisted
+      strawhits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, combohit, straw, tshs.index(), strawresponse, hintpiececa_)); // use original index, so the KSeed can be re-persisted
       // set the hit state according to what it was in the fit
       strawhits.back()->setState(tshs.wireHitState());
       if(strawhits.back()->hitState().usable())ngood++;
@@ -426,7 +428,7 @@ namespace mu2e {
               // compute PCA between the trajectory and this straw
               PCA pca(ptraj, wline, hint, tprec_ );
               if(fabs(pca.doca()) < maxStrawHitDoca_){ // add test of chi TODO
-                addhits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, strawhit, straw, ich, strawresponse));
+                addhits.push_back(std::make_shared<KKSTRAWHIT>(kkbf, pca, strawhit, straw, ich, strawresponse, hintpiececa_));
                 oldhits.insert(addhits.back()->strawHitIndex());
                 // add the associated straw
                 if(matcorr_){

@@ -557,6 +557,7 @@ Mu2eKinKal : {
       @table::Mu2eKinKal.KKFIT
       SaveTrajectory : T0
       SaveDomains : false
+      StrawHitHintPieceCA : true
     }
     FitSettings : @local::Mu2eKinKal.CHSEEDFIT
     ExtensionSettings : @local::Mu2eKinKal.CHSEEDEXT
@@ -572,6 +573,7 @@ Mu2eKinKal : {
       @table::Mu2eKinKal.KKFIT
       SaveTrajectory : Detector
       SaveDomains : true
+      StrawHitHintPieceCA : true
     }
     FitSettings : @local::Mu2eKinKal.CHSEEDFIT
     ExtensionSettings : @local::Mu2eKinKal.CHDRIFTEXT
