@@ -30,6 +30,8 @@
 #include "cetlib_except/exception.h"
 #include <memory>
 #include <cmath>
+#include <cstdlib> // KKSH_DIAG getenv: TEMPORARY, DO NOT COMMIT
+#include <sstream> // KKSH_DIAG: TEMPORARY, DO NOT COMMIT
 namespace mu2e {
   using KinKal::BFieldMap;
   using KinKal::SensorLine;
@@ -162,17 +164,44 @@ namespace mu2e {
     // otherwise use the time at the center of the wire, corrected for drift
     auto mtime =wire().timeAtMidpoint();
     CAHint tphint = ca_.usable() ?  ca_.hint() : CAHint(mtime-chit_.driftTime(),mtime);
-    PCA pca(ptraj,wirePtr(),tphint,precision());
+    // KKSH_HINTCA: TEMPORARY A/B switch for KinKal PR 226 -- DO NOT COMMIT. Set, the hit's CA stays on the hint's piece
+    // (main's behaviour for hits only; material xings keep the piecewise CA)
+    static const bool hintca = std::getenv("KKSH_HINTCA") != nullptr;
+    auto findca = [&](CAHint const& hint) {
+      return hintca ? CA(ptraj.nearestTraj(hint.particleToca_),wirePtr(),hint,precision())
+        : static_cast<CA>(PCA(ptraj,wirePtr(),hint,precision())); };
+    CA pca = findca(tphint);
     // check that we're on the right branch: we can move off if t0 changes a lot between iterations
     double dz = straw().origin().z() - ca_.particlePoca().Z();
     double maxdz(100.0);// need a better absolute scale; should come from KTRAJ FIXME
     if((!pca.usable()) || fabs(dz) >  maxdz) {
       tphint = CAHint(Mu2eKinKal::zTime(ptraj,straw().origin().z(),mtime-chit_.driftTime()),mtime);
-      pca = PCA(ptraj,wirePtr(),tphint,precision());
+      pca = findca(tphint);
       dz = straw().origin().z() - pca.particlePoca().Z();
       if((!pca.usable()) || fabs(dz) >  maxdz) whstate_.state_ = WireHitState::unusable;// give up on 2nd try
     }
-    ca_ = static_cast<CA>(pca);
+    // KKSH_DIAG: TEMPORARY diagnostic for the KinKal PR 226 lost CH fits -- DO NOT COMMIT
+    static const bool kkshdiag = std::getenv("KKSH_DIAG") != nullptr;
+    if(kkshdiag && ca_.usable()){
+      // main's answer on the same trajectory: the closest approach on the hint's piece alone
+      auto const& hpiece = ptraj.nearestTraj(tphint.particleToca_);
+      CA hca(hpiece,wirePtr(),tphint,precision());
+      double ts = pca.particleToca();
+      auto const& spiece = pca.particleTraj();
+      double dpos = std::sqrt((hpiece->position3(ts) - spiece.position3(ts)).Mag2());
+      double maxgap, avggap; size_t igap;
+      ptraj.gaps(maxgap,igap,avggap);
+      std::ostringstream os; os.precision(10);
+      os << "KKSHDIAG upd straw " << straw_.id() << " hint " << tphint.particleToca_
+        << " hintpiece " << ptraj.nearestIndex(tphint.particleToca_) << " -> toca " << ts
+        << " piece " << ptraj.nearestIndex(ts) << " of " << ptraj.pieces().size()
+        << " doca " << pca.doca() << " status " << pca.status()
+        << " | hintCA toca " << hca.particleToca() << " doca " << hca.doca() << " status " << hca.status()
+        << " | dpos(hint-sol@toca) " << dpos << " solrange [" << spiece.range().begin() << "," << spiece.range().end()
+        << "] inrange " << spiece.range().inRange(ts) << " maxgap " << maxgap;
+      std::cout << os.str() << std::endl;
+    }
+    ca_ = pca;
   }
 
   template <class KTRAJ> void KKStrawHit<KTRAJ>::updateWHS(MetaIterConfig const& miconfig) {
@@ -182,6 +211,30 @@ namespace mu2e {
     auto bkgshu = miconfig.findUpdater<BkgANNSHU>();
     auto diagshu = miconfig.findUpdater<PanelDiagSHU>();
     CA ca = unbiasedClosestApproach();
+    // KKSH_DIAG: TEMPORARY diagnostic for the KinKal PR 226 lost CH fits -- DO NOT COMMIT
+    static const bool kkshdiag = std::getenv("KKSH_DIAG") != nullptr;
+    if(kkshdiag){
+      // main's unbiasing for comparison: this hit's weight removed from the reference piece itself
+      KinKal::Weights mwt(HIT::referenceParameters());
+      mwt -= this->weight();
+      KinKal::Parameters mpars(mwt);
+      CA mca(std::make_shared<KTRAJ>(mpars,ca_.particleTraj()),wirePtr(),ca_.hint(),ca_.precision());
+      auto upars = HIT::unbiasedParameters();
+      double dpar(0.0);
+      for(size_t ip=0;ip<KinKal::NParams();++ip){
+        double s2 = mpars.covariance()(ip,ip);
+        if(s2 > 0.0) dpar += std::pow(upars.parameters()[ip]-mpars.parameters()[ip],2)/s2;
+      }
+      auto pr = [&](const char* lab, CA const& c){
+        std::cout << " " << lab << " ok " << c.usable() << " toca " << c.particleToca() << " doca " << c.doca()
+          << " dvar " << c.docaVar();
+        if(c.usable()) std::cout << " dt " << c.deltaT() << " rdrift " << fillDriftInfo(c).rDrift_;
+      };
+      std::cout << "KKSHDIAG whs straw " << straw_.id() << " temp " << miconfig.temperature() << " state " << whstate_.state_
+        << " refpiece [" << ca_.particleTraj().range().begin() << "," << ca_.particleTraj().range().end() << "]";
+      pr("ref",ca_); pr("unb",ca); pr("main",mca);
+      std::cout << " dpar(unb-main) " << std::sqrt(dpar) << std::endl;
+    }
     if(ca.usable()){
       auto dinfo = fillDriftInfo(ca);
       // there can be multiple updaters: apply them all
