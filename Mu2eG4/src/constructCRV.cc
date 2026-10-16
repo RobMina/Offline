@@ -35,6 +35,7 @@
 #include "Geant4/G4UnionSolid.hh"
 #include "Geant4/G4LogicalVolume.hh"
 #include "Geant4/G4PVPlacement.hh"
+#include <cfloat>
 
 #include "Geant4/G4VisAttributes.hh"
 
@@ -170,6 +171,42 @@ namespace mu2e
         }
       }//dimensions of all layers
 
+      //sectors with per-module offsets get one box mother around all modules, since displaced modules do not fit the layered mothers
+      bool flatMother = _config.hasName("crs.moduleOffsets"+CRVsectorName.substr(4));
+      std::vector<G4LogicalVolume*> motherLayersLogical;
+      if(flatMother)
+      {
+        CLHEP::Hep3Vector lo( DBL_MAX, DBL_MAX, DBL_MAX);
+        CLHEP::Hep3Vector hi(-DBL_MAX,-DBL_MAX,-DBL_MAX);
+        auto extend=[&lo,&hi](const CLHEP::Hep3Vector &c, const std::vector<double> &h)
+        {
+          for(int i=0; i<3; ++i) {lo[i]=std::min(lo[i],c[i]-h[i]); hi[i]=std::max(hi[i],c[i]+h[i]);}
+        };
+        for(const auto &module : modules)
+        {
+          for(const auto &layer : module.getLayers()) extend(layer.getPosition(),layer.getHalfLengths());
+          for(const auto &absorber : module.getAbsorberLayers()) extend(absorber.getPosition(),absorber.getHalfLengths());
+          for(const auto &sheet : module.getAluminumSheets()) extend(sheet.getPosition(),sheet.getHalfLengths());
+        }
+        CLHEP::Hep3Vector flatCenterInMu2e=0.5*(lo+hi);
+        G4Box *flatSolid=new G4Box("CRSmother_"+CRVsectorName,0.5*(hi[0]-lo[0]),0.5*(hi[1]-lo[1]),0.5*(hi[2]-lo[2]));
+        G4LogicalVolume *flatLogical=new G4LogicalVolume(flatSolid, hallAirMaterial, flatSolid->GetName());
+        flatLogical->SetVisAttributes(G4VisAttributes::GetInvisible());
+        CLHEP::Hep3Vector flatAirOffset = flatCenterInMu2e - parentCenterInMu2e;
+        G4VPhysicalVolume* flatPhysical = new G4PVPlacement(nullptr, flatAirOffset, flatLogical, flatSolid->GetName(),
+                                                            parent.logical, false, 0, false);
+        if(doSurfaceCheck) checkForOverlaps(flatPhysical, _config, verbosityLevel>0);
+        VolumeInfo info(flatSolid->GetName(),flatAirOffset,parent.centerInWorld);
+        info.solid    = flatSolid;
+        info.logical  = flatLogical;
+        info.physical = flatPhysical;
+        _helper.addVolInfo(info);
+        motherLayersLogical.assign(motherCenterInMu2e.size(),flatLogical);
+        motherCenterInMu2e.assign(motherCenterInMu2e.size(),flatCenterInMu2e);
+      }
+      else
+      {
+
       //construct the mother solid for the CRV sector
       //by combining the solids of each layer using G4UnionSolids
       ostringstream oss;
@@ -266,7 +303,6 @@ namespace mu2e
       //(placed in big mother volume from above,
       //to keep the number of daugther volumes
       //in the G4UnionSolids small)
-      std::vector<G4LogicalVolume*> motherLayersLogical;
       for(size_t l=0; l<motherCenterInMu2e.size(); ++l)
       {
         oss.str("");
@@ -291,6 +327,8 @@ namespace mu2e
                                                                    false);
         if(doSurfaceCheck) checkForOverlaps(motherLayerPhysical, _config, verbosityLevel>0);
       }
+
+      } //layered mothers
 
       /*******************************************/
       /**** some solids/volumes used later on ****/

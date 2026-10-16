@@ -63,6 +63,7 @@ namespace mu2e
     std::vector<int>                _nCountersPerModule;
     std::vector<bool>               _countersOnly;
     std::vector<CLHEP::Hep3Vector>  _firstCounter;
+    std::vector<std::vector<CLHEP::Hep3Vector> > _moduleOffsets;  //per-module translation (alignment), default zero
     std::vector<CLHEP::Hep3Vector>  _offsetDirection;   //direction in which the layers are shifted
     std::vector<CLHEP::Hep3Vector>  _gapDirection;      //direction to the next gap between the counters
     std::vector<CLHEP::Hep3Vector>  _layerDirection;    //direction to the next layer

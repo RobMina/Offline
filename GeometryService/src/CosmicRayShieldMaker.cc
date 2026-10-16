@@ -70,6 +70,7 @@ namespace mu2e
     _nCountersPerModule.resize(_nSectors);
     _countersOnly.resize(_nSectors);
     _firstCounter.resize(_nSectors);
+    _moduleOffsets.resize(_nSectors);
     _offsetDirection.resize(_nSectors);
     _gapDirection.resize(_nSectors);
     _layerDirection.resize(_nSectors);
@@ -88,6 +89,13 @@ namespace mu2e
       _nCountersPerModule[i] = config.getInt("crs.nCountersPerModule"+_crvSectorNames[i]);  //at one layer
       _countersOnly[i]       = config.getBool("crs.countersOnly"+_crvSectorNames[i],false); //optionally remove strongbacks, aluminium sheets, absorbers
       _firstCounter[i]       = config.getHep3Vector("crs.firstCounter"+_crvSectorNames[i]);
+      _moduleOffsets[i].assign(_nModules[i],CLHEP::Hep3Vector(0,0,0));
+      if(config.hasName("crs.moduleOffsets"+_crvSectorNames[i]))  //optional: x,y,z per module in mm (alignment)
+      {
+        std::vector<double> offsets;
+        config.getVectorDouble("crs.moduleOffsets"+_crvSectorNames[i],offsets,3*_nModules[i]);
+        for(int m=0; m<_nModules[i]; m++) _moduleOffsets[i][m].set(offsets[3*m],offsets[3*m+1],offsets[3*m+2]);
+      }
       _offsetDirection[i]    = config.getHep3Vector("crs.offsetDirection"+_crvSectorNames[i]);
       _gapDirection[i]       = config.getHep3Vector("crs.gapDirection"+_crvSectorNames[i]);
       _layerDirection[i]     = config.getHep3Vector("crs.layerDirection"+_crvSectorNames[i]);
@@ -182,6 +190,7 @@ namespace mu2e
           int smallGapsPerModule = nCounters/2;
           counterPosition += imodule * (largeGapsPerModule * VTNCLargeGap + smallGapsPerModule * VTNCSmallGap);
           counterPosition += imodule * VTNCBetweenModules;
+          counterPosition += _moduleOffsets[isector][imodule];
           int largeGaps=icounter/2;
           int smallGaps=(icounter+1)/2;
           counterPosition += largeGaps * VTNCLargeGap + smallGaps * VTNCSmallGap;
@@ -200,6 +209,7 @@ namespace mu2e
         int smallGapsPerModule = nCounters/2;
         layerStart += imodule * (largeGapsPerModule * VTNCLargeGap + smallGapsPerModule * VTNCSmallGap);
         layerStart += imodule * VTNCBetweenModules;
+        layerStart += _moduleOffsets[isector][imodule];
 
         CLHEP::Hep3Vector layerEnd = layerStart;
         int largeGaps=nCounters/2-1;
