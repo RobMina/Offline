@@ -68,6 +68,9 @@ namespace mu2e
       fhicl::Sequence<std::string> lookupTableFileNames{ Name("lookupTableFileNames"), Comment("lookup tables for Crv sectors")};
       fhicl::Sequence<double> scintillationYields{ Name("scintillationYields"), Comment("scintillation yields at Crv sectors")};
       fhicl::Atom<double> photonYieldScaleFactor{ Name("photonYieldScaleFactor"), Comment("global scale factor for the photon yield")};
+      fhicl::Sequence<double> fiberSignalSpeedRatios{ Name("fiberSignalSpeedRatios"),
+        Comment("fiber signal speeds at Crv sectors relative to their lookup tables (empty: 1)"),
+        std::vector<double>{}};
       fhicl::Atom<double> photonYieldVariationScale{ Name("photonYieldVariationScale"),Comment("scale factor of the photon yield variation")};
       fhicl::Atom<double> digitizationStart{ Name("digitizationStart"), Comment("start of digitization after DAQ event window start")};
       fhicl::Atom<double> digitizationEnd{ Name("digitizationEnd"), Comment("end of digitization after DAQ event window start")};
@@ -95,6 +98,7 @@ namespace mu2e
     bool                                                       _localLookupTables;
     std::vector<std::string>                                   _lookupTableFileNames;
     std::vector<double>                                        _scintillationYields;
+    std::vector<double>                                        _fiberSignalSpeedRatios;
     std::vector<boost::shared_ptr<mu2eCrv::MakeCrvPhotons> >   _makeCrvPhotons;
 
     double                                       _photonYieldScaleFactor;
@@ -161,6 +165,7 @@ namespace mu2e
     _localLookupTables(conf().localLookupTables()),
     _lookupTableFileNames(conf().lookupTableFileNames()),
     _scintillationYields(conf().scintillationYields()),
+    _fiberSignalSpeedRatios(conf().fiberSignalSpeedRatios()),
     _photonYieldScaleFactor(conf().photonYieldScaleFactor()),
     _photonYieldVariationScale(conf().photonYieldVariationScale()),
     _digitizationStart(conf().digitizationStart()),
@@ -191,6 +196,9 @@ namespace mu2e
     if(_lookupTableFileNames.size()!=_CRVSectors.size()) throw std::logic_error("ERROR: mismatch between specified CRV sector names and lookup table list");
     if(_reflectors.size()!=_CRVSectors.size()) throw std::logic_error("ERROR: mismatch between specified CRV sector names and reflector list");
     if(_scintillationYields.size()!=_CRVSectors.size()) throw std::logic_error("ERROR: mismatch between specified CRV sector names and scintillation yield list");
+    if(_fiberSignalSpeedRatios.empty()) _fiberSignalSpeedRatios.assign(_CRVSectors.size(),1.0);
+    if(_fiberSignalSpeedRatios.size()!=_CRVSectors.size())
+      throw std::logic_error("ERROR: mismatch between specified CRV sector names and fiber signal speed ratio list");
 
     std::set<std::string> filedirs;
     for(size_t i=0; i<_lookupTableFileNames.size(); ++i)
@@ -198,10 +206,11 @@ namespace mu2e
       bool tableLoaded=false;
       for(size_t j=0; j<i; ++j)
       {
-        // the scintillation yield is state held on the shared MakeCrvPhotons instance, so two
-        // sectors may only share an instance if they agree on the yield as well as the table
+        // the scintillation yield and the fiber signal speed ratio are state held on the shared MakeCrvPhotons
+        // instance, so two sectors may only share an instance if they agree on both as well as the table
         if(_lookupTableFileNames[i]==_lookupTableFileNames[j] &&
-           _scintillationYields[i]==_scintillationYields[j])
+           _scintillationYields[i]==_scintillationYields[j] &&
+           _fiberSignalSpeedRatios[i]==_fiberSignalSpeedRatios[j])
         {
            tableLoaded=true;
            _makeCrvPhotons.emplace_back(_makeCrvPhotons[j]);
@@ -224,6 +233,7 @@ namespace mu2e
         photonMaker->LoadLookupTable(filespec,_debug);
       }
       photonMaker->SetScintillationYield(_scintillationYields[i]);
+      photonMaker->SetFiberSignalSpeedRatio(_fiberSignalSpeedRatios[i]);
       if(_debug>0) std::cout<<"CRV sector "<<i<<" ("<<_CRVSectors[i]<<") uses "<<_makeCrvPhotons.back()->GetFileName()<<" with scintillation yield of "<<_scintillationYields[i]<<" photons/MeV"<<std::endl;
     }
 

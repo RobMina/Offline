@@ -98,6 +98,7 @@ class MakeCrvPhotons
                                                       _randFlat(randFlat), _randGaussQ(randGaussQ), _randPoissonQ(randPoissonQ)
     {
       _scintillationYield=39400;
+      _invSpeedShift=0;
       for(int i=0; i<_nSiPMs; ++i) _photonYieldDeviation[i]=1.0;
     }
 
@@ -116,6 +117,7 @@ class MakeCrvPhotons
     int                       GetNumberOfPhotons(int SiPM);
     const std::vector<double> &GetArrivalTimes(int SiPM);
     void                      SetScintillationYield(double yield) {_scintillationYield=yield;}
+    void                      SetFiberSignalSpeedRatio(double ratio);  //fiber signal speed relative to the lookup table
     void                      SetPhotonYieldDeviation(double deviation, int SiPM) {_photonYieldDeviation[SiPM]=deviation;}
 
   private:
@@ -125,6 +127,7 @@ class MakeCrvPhotons
 
     std::vector<double>       _arrivalTimes[_nSiPMs];
     double                    _scintillationYield;
+    double                    _invSpeedShift;  //extra delay per mm of distance to the SiPM end [ns/mm]
     double                    _photonYieldDeviation[_nSiPMs];
 
     LookupConstants           _LC;

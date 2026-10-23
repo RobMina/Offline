@@ -412,6 +412,9 @@ void MakeCrvPhotons::MakePhotons(const CLHEP::Hep3Vector &stepStartTmp,   //they
           //add additional time delay due to the photons bouncing around
           arrivalTime+=GetRandomTime(theBin);
 
+          //fiber signal speed correction for the distance to the SiPM end
+          arrivalTime+=_invSpeedShift*(p.z()+_LC.halfLength);
+
           if(reflector!=-1 && reflector!=-2) _arrivalTimes[SiPM].push_back(arrivalTime);
           else _arrivalTimes[SiPM+1].push_back(arrivalTime);
 
@@ -470,6 +473,42 @@ bool MakeCrvPhotons::IsInsideFiber(const CLHEP::Hep3Vector &p, const CLHEP::Hep3
   if(fiberNumber==0) phi=dir2D.angle(radiusVector0);  //angle returns between 0 and pi
   if(fiberNumber==1) phi=dir2D.angle(radiusVector1);
   return true;
+}
+
+void MakeCrvPhotons::SetFiberSignalSpeedRatio(double ratio)
+{
+  _invSpeedShift=0;
+  if(ratio==1.0) return;
+  //effective inverse signal speed of the table: slope of the 10% quantile of the scintillation delays vs. distance
+  size_t nx=_LBD.xBins.size()-1, ny=_LBD.yBins.size()-1, nz=_LBD.zBins.size()-1;
+  double sw=0, sd=0, st=0, sdd=0, sdt=0;
+  for(size_t iz=0; iz<nz; ++iz)
+  {
+    std::vector<double> h;
+    for(size_t ix=0; ix<nx; ++ix)
+    {
+      for(size_t iy=0; iy<ny; ++iy)
+      {
+        const LookupBin &b=_bins[0][iz+iy*nz+ix*ny*nz];
+        if(b.probabilityScaleTimeDelays<=0) continue;
+        if(b.timeDelays.size()>h.size()) h.resize(b.timeDelays.size(),0);
+        for(size_t j=0; j<b.timeDelays.size(); ++j)
+          h[j]+=b.arrivalProbability*b.timeDelays[j]/b.probabilityScaleTimeDelays;
+      }
+    }
+    double total=0;
+    for(double v : h) total+=v;
+    if(total<=0) continue;
+    double sum=0;
+    size_t j=0;
+    for(; j<h.size(); ++j) {sum+=h[j]; if(sum>=0.1*total) break;}
+    double d=0.5*(_LBD.zBins[iz]+_LBD.zBins[iz+1])+_LC.halfLength;  //distance to the SiPM end
+    sw+=1; sd+=d; st+=j; sdd+=d*d; sdt+=d*j;
+  }
+  double den=sw*sdd-sd*sd;
+  if(den<=0) throw std::logic_error("MakeCrvPhotons: cannot determine the fiber signal speed of "+_fileName);
+  double tableInvSpeed=(sw*sdt-sd*st)/den;
+  _invSpeedShift=tableInvSpeed*(1.0/ratio-1.0);
 }
 
 double MakeCrvPhotons::GetRandomTime(const LookupBin *theBin)
