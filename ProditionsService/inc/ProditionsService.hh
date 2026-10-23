@@ -8,6 +8,7 @@
 
 #include "Offline/AnalysisConfig/inc/MVACatalogConfig.hh"
 #include "Offline/CRVConfig/inc/CRVCalibConfig.hh"
+#include "Offline/CRVConfig/inc/CRVLightPropagationConfig.hh"
 #include "Offline/CRVConfig/inc/CRVOrdinalConfig.hh"
 #include "Offline/CRVConfig/inc/CRVPhotonYieldConfig.hh"
 #include "Offline/CRVConfig/inc/CRVStatusConfig.hh"
@@ -60,6 +61,9 @@ class ProditionsService {
     fhicl::Table<CRVPhotonYieldConfig> crvPhotonYield{
         Name("crvPhotonYield"),
         Comment("CRV photon yield deviation map for each channel")};
+    fhicl::Table<CRVLightPropagationConfig> crvLightPropagation{
+        Name("crvLightPropagation"),
+        Comment("CRV fiber signal speed and attenuation length of each bar, relative to the lookup tables")};
     fhicl::Table<CRVStatusConfig> crvStatus{
         Name("crvStatus"), Comment("CRV bad channels configuration")};
     fhicl::Table<CRVCalibConfig> crvCalib{

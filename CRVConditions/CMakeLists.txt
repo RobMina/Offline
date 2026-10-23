@@ -1,6 +1,7 @@
 cet_make_library(
     SOURCE
       src/CRVCalibMaker.cc
+      src/CRVLightPropagationMaker.cc
       src/CRVOrdinalMaker.cc
       src/CRVPhotonYieldMaker.cc
       src/CRVStatusMaker.cc

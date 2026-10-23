@@ -23,6 +23,7 @@ Proditions : {
    trkQualCatalog : @local::TrkQualCatalog
    crvOrdinal : @local::CRVOrdinal
    crvPhotonYield : @local::CRVPhotonYield
+   crvLightPropagation : @local::CRVLightPropagation
    crvStatus : @local::CRVStatus
    crvCalib : @local::CRVCalib
    simbookkeeper : @local::SimBookkeeper

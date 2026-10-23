@@ -396,6 +396,13 @@ CREATE TABLE crv.photon
 GRANT SELECT ON crv.photon TO PUBLIC;
 GRANT INSERT ON crv.photon TO crv_role;
 
+CREATE TABLE crv.propagation
+  (cid INTEGER, 
+   bar INTEGER,  signalspeedratio NUMERIC, attenuationlengthratio NUMERIC,
+   CONSTRAINT crv_propagation_pk PRIMARY KEY (cid,bar) );
+GRANT SELECT ON crv.propagation TO PUBLIC;
+GRANT INSERT ON crv.propagation TO crv_role;
+
 CREATE TABLE crv.time
   (cid INTEGER, 
    channel INTEGER,  timeoffset NUMERIC,  

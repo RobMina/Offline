@@ -99,6 +99,10 @@ class MakeCrvPhotons
     {
       _scintillationYield=39400;
       _invSpeedShift=0;
+      _attenuationShift=0;
+      _tableInvSpeed=0;
+      _tableAttenuationLength=0;
+      _tablePropagationKnown=false;
       for(int i=0; i<_nSiPMs; ++i) _photonYieldDeviation[i]=1.0;
     }
 
@@ -117,7 +121,9 @@ class MakeCrvPhotons
     int                       GetNumberOfPhotons(int SiPM);
     const std::vector<double> &GetArrivalTimes(int SiPM);
     void                      SetScintillationYield(double yield) {_scintillationYield=yield;}
-    void                      SetFiberSignalSpeedRatio(double ratio);  //fiber signal speed relative to the lookup table
+    //fiber signal speed and attenuation length relative to the lookup table
+    void                      SetLightPropagation(double speedRatio, double attenuationLengthRatio);
+    void                      GetTablePropagation(double &invSpeed, double &attenuationLength);  //[ns/mm], [mm]
     void                      SetPhotonYieldDeviation(double deviation, int SiPM) {_photonYieldDeviation[SiPM]=deviation;}
 
   private:
@@ -128,6 +134,9 @@ class MakeCrvPhotons
     std::vector<double>       _arrivalTimes[_nSiPMs];
     double                    _scintillationYield;
     double                    _invSpeedShift;  //extra delay per mm of distance to the SiPM end [ns/mm]
+    double                    _attenuationShift;  //extra attenuation relative to the table [1/mm]
+    double                    _tableInvSpeed, _tableAttenuationLength;  //effective values of the lookup table
+    bool                      _tablePropagationKnown;
     double                    _photonYieldDeviation[_nSiPMs];
 
     LookupConstants           _LC;
@@ -139,6 +148,7 @@ class MakeCrvPhotons
     CLHEP::RandGaussQ         &_randGaussQ;
     CLHEP::RandPoissonQ       &_randPoissonQ;
 
+    void   FindTablePropagation();
     bool   IsInsideScintillator(const CLHEP::Hep3Vector &p);
     bool   IsInsideFiber(const CLHEP::Hep3Vector &p, const CLHEP::Hep3Vector &dir, double &r, double &phi);
     double GetRandomTime(const LookupBin *theBin);

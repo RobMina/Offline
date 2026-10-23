@@ -390,6 +390,8 @@ void MakeCrvPhotons::MakePhotons(const CLHEP::Hep3Vector &stepStartTmp,   //they
 
       //loop over all photons created at this point
       int nPhotons = nPhotonsScintillation + nPhotonsCerenkov;
+      //attenuation relative to the table, pivot at the bar centre (p.z()=0); probabilities above 1 always fire
+      double attenuationWeight = (_attenuationShift==0 ? 1.0 : exp(-_attenuationShift*p.z()));
       for(int i=0; i<nPhotons; i++)
       {
         //get the right bin
@@ -400,6 +402,7 @@ void MakeCrvPhotons::MakePhotons(const CLHEP::Hep3Vector &stepStartTmp,   //they
         //photon arrival probability at SiPM
         double probability = theBin->arrivalProbability;
         probability*=_photonYieldDeviation[SiPM];   //channel-specific deviation from nominal, e.g. due to scintillator variations or SiPM misalignments
+        probability*=attenuationWeight;
         if(_randFlat.fire()<=probability)  //a photon arrives at the SiPM --> calculate arrival time
         {
           //start time of photons
@@ -475,26 +478,34 @@ bool MakeCrvPhotons::IsInsideFiber(const CLHEP::Hep3Vector &p, const CLHEP::Hep3
   return true;
 }
 
-void MakeCrvPhotons::SetFiberSignalSpeedRatio(double ratio)
+void MakeCrvPhotons::FindTablePropagation()
 {
-  _invSpeedShift=0;
-  if(ratio==1.0) return;
-  //effective inverse signal speed of the table: slope of the 10% quantile of the scintillation delays vs. distance
+  //effective inverse signal speed of the table: slope of the 10% quantile of the scintillation delays vs. distance;
+  //effective attenuation length: slope of the log of the summed arrival probability vs. distance (bar ends excluded)
   size_t nx=_LBD.xBins.size()-1, ny=_LBD.yBins.size()-1, nz=_LBD.zBins.size()-1;
   double sw=0, sd=0, st=0, sdd=0, sdt=0;
+  double aw=0, ad=0, al=0, add=0, adl=0;
   for(size_t iz=0; iz<nz; ++iz)
   {
+    double d=0.5*(_LBD.zBins[iz]+_LBD.zBins[iz+1])+_LC.halfLength;  //distance to the SiPM end
     std::vector<double> h;
+    double probability=0;
     for(size_t ix=0; ix<nx; ++ix)
     {
       for(size_t iy=0; iy<ny; ++iy)
       {
         const LookupBin &b=_bins[0][iz+iy*nz+ix*ny*nz];
+        probability+=b.arrivalProbability;
         if(b.probabilityScaleTimeDelays<=0) continue;
         if(b.timeDelays.size()>h.size()) h.resize(b.timeDelays.size(),0);
         for(size_t j=0; j<b.timeDelays.size(); ++j)
           h[j]+=b.arrivalProbability*b.timeDelays[j]/b.probabilityScaleTimeDelays;
       }
+    }
+    if(probability>0 && d>0.2*_LC.halfLength && d<1.8*_LC.halfLength)
+    {
+      double l=log(probability);
+      aw+=1; ad+=d; al+=l; add+=d*d; adl+=d*l;
     }
     double total=0;
     for(double v : h) total+=v;
@@ -502,13 +513,33 @@ void MakeCrvPhotons::SetFiberSignalSpeedRatio(double ratio)
     double sum=0;
     size_t j=0;
     for(; j<h.size(); ++j) {sum+=h[j]; if(sum>=0.1*total) break;}
-    double d=0.5*(_LBD.zBins[iz]+_LBD.zBins[iz+1])+_LC.halfLength;  //distance to the SiPM end
     sw+=1; sd+=d; st+=j; sdd+=d*d; sdt+=d*j;
   }
   double den=sw*sdd-sd*sd;
   if(den<=0) throw std::logic_error("MakeCrvPhotons: cannot determine the fiber signal speed of "+_fileName);
-  double tableInvSpeed=(sw*sdt-sd*st)/den;
-  _invSpeedShift=tableInvSpeed*(1.0/ratio-1.0);
+  _tableInvSpeed=(sw*sdt-sd*st)/den;
+  double aden=aw*add-ad*ad;
+  double aslope=(aden>0 ? (aw*adl-ad*al)/aden : 0);
+  if(!(aslope<0)) throw std::logic_error("MakeCrvPhotons: cannot determine the attenuation length of "+_fileName);
+  _tableAttenuationLength=-1.0/aslope;
+  _tablePropagationKnown=true;
+}
+
+void MakeCrvPhotons::GetTablePropagation(double &invSpeed, double &attenuationLength)
+{
+  if(!_tablePropagationKnown) FindTablePropagation();
+  invSpeed=_tableInvSpeed;
+  attenuationLength=_tableAttenuationLength;
+}
+
+void MakeCrvPhotons::SetLightPropagation(double speedRatio, double attenuationLengthRatio)
+{
+  _invSpeedShift=0;
+  _attenuationShift=0;
+  if(speedRatio==1.0 && attenuationLengthRatio==1.0) return;
+  if(!_tablePropagationKnown) FindTablePropagation();
+  if(speedRatio!=1.0) _invSpeedShift=_tableInvSpeed*(1.0/speedRatio-1.0);
+  if(attenuationLengthRatio!=1.0) _attenuationShift=(1.0/attenuationLengthRatio-1.0)/_tableAttenuationLength;
 }
 
 double MakeCrvPhotons::GetRandomTime(const LookupBin *theBin)

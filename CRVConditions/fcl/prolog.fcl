@@ -11,6 +11,11 @@ CRVPhotonYield : {
    verbose : 0
 }
 
+CRVLightPropagation : {
+   useDb : false  #false sets all fiber signal speed and attenuation length ratios to 1 (as in the lookup tables)
+   verbose : 0
+}
+
 CRVStatus : {
    useDb : true
    verbose : 0

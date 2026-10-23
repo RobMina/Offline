@@ -8,6 +8,7 @@
 #include "Offline/ProditionsService/inc/ProditionsService.hh"
 
 #include "Offline/CRVConditions/inc/CRVCalibCache.hh"
+#include "Offline/CRVConditions/inc/CRVLightPropagationCache.hh"
 #include "Offline/CRVConditions/inc/CRVOrdinalCache.hh"
 #include "Offline/CRVConditions/inc/CRVPhotonYieldCache.hh"
 #include "Offline/CRVConditions/inc/CRVStatusCache.hh"
@@ -53,6 +54,8 @@ ProditionsService::ProditionsService(Parameters const& sTable,
   _caches[cor->name()] = cor;
   auto csy = std::make_shared<mu2e::CRVPhotonYieldCache>(_config.crvPhotonYield());
   _caches[csy->name()] = csy;
+  auto clp = std::make_shared<mu2e::CRVLightPropagationCache>(_config.crvLightPropagation());
+  _caches[clp->name()] = clp;
   auto cst = std::make_shared<mu2e::CRVStatusCache>(_config.crvStatus());
   _caches[cst->name()] = cst;
   auto cca = std::make_shared<mu2e::CRVCalibCache>(_config.crvCalib());

@@ -5,6 +5,7 @@
 // Original Author: Ralf Ehrlich
 
 #include "Offline/CRVConditions/inc/CRVDigitizationPeriod.hh"
+#include "Offline/CRVConditions/inc/CRVLightPropagation.hh"
 #include "Offline/CRVConditions/inc/CRVPhotonYield.hh"
 #include "Offline/CRVResponse/inc/MakeCrvPhotons.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CosmicRayShield.hh"
@@ -69,7 +70,8 @@ namespace mu2e
       fhicl::Sequence<double> scintillationYields{ Name("scintillationYields"), Comment("scintillation yields at Crv sectors")};
       fhicl::Atom<double> photonYieldScaleFactor{ Name("photonYieldScaleFactor"), Comment("global scale factor for the photon yield")};
       fhicl::Sequence<double> fiberSignalSpeedRatios{ Name("fiberSignalSpeedRatios"),
-        Comment("fiber signal speeds at Crv sectors relative to their lookup tables (empty: 1)"),
+        Comment("fiber signal speeds at Crv sectors relative to their lookup tables (empty: 1),"
+                " multiplied by the per-bar ratios of the CRVLightPropagation prodition"),
         std::vector<double>{}};
       fhicl::Atom<double> photonYieldVariationScale{ Name("photonYieldVariationScale"),Comment("scale factor of the photon yield variation")};
       fhicl::Atom<double> digitizationStart{ Name("digitizationStart"), Comment("start of digitization after DAQ event window start")};
@@ -103,6 +105,7 @@ namespace mu2e
 
     double                                       _photonYieldScaleFactor;
     mu2e::ProditionsHandle<mu2e::CRVPhotonYield> _photonYieldVariationVector;
+    mu2e::ProditionsHandle<mu2e::CRVLightPropagation> _lightPropagation;
     double                                       _photonYieldVariationScale;
 
     //On-spill
@@ -206,11 +209,10 @@ namespace mu2e
       bool tableLoaded=false;
       for(size_t j=0; j<i; ++j)
       {
-        // the scintillation yield and the fiber signal speed ratio are state held on the shared MakeCrvPhotons
-        // instance, so two sectors may only share an instance if they agree on both as well as the table
+        // the scintillation yield is state held on the shared MakeCrvPhotons instance, so two
+        // sectors may only share an instance if they agree on the yield as well as the table
         if(_lookupTableFileNames[i]==_lookupTableFileNames[j] &&
-           _scintillationYields[i]==_scintillationYields[j] &&
-           _fiberSignalSpeedRatios[i]==_fiberSignalSpeedRatios[j])
+           _scintillationYields[i]==_scintillationYields[j])
         {
            tableLoaded=true;
            _makeCrvPhotons.emplace_back(_makeCrvPhotons[j]);
@@ -233,7 +235,13 @@ namespace mu2e
         photonMaker->LoadLookupTable(filespec,_debug);
       }
       photonMaker->SetScintillationYield(_scintillationYields[i]);
-      photonMaker->SetFiberSignalSpeedRatio(_fiberSignalSpeedRatios[i]);
+      if(_debug>0)
+      {
+        double invSpeed, attenuationLength;
+        photonMaker->GetTablePropagation(invSpeed,attenuationLength);
+        std::cout<<"  lookup table signal speed "<<1.0/invSpeed<<" mm/ns, attenuation length "
+                 <<attenuationLength<<" mm"<<std::endl;
+      }
       if(_debug>0) std::cout<<"CRV sector "<<i<<" ("<<_CRVSectors[i]<<") uses "<<_makeCrvPhotons.back()->GetFileName()<<" with scintillation yield of "<<_scintillationYields[i]<<" photons/MeV"<<std::endl;
     }
 
@@ -275,6 +283,7 @@ namespace mu2e
     std::map<std::pair<mu2e::CRSScintillatorBarIndex,int>,std::vector<CrvPhotons::SinglePhoton> > photonMap;
 
     auto const& photonYieldVariationVector = _photonYieldVariationVector.get(event.id());
+    auto const& lightPropagation = _lightPropagation.get(event.id());
 
     GeomHandle<CosmicRayShield> CRS;
     GlobalConstantsHandle<ParticleDataList> particleDataList;
@@ -367,6 +376,11 @@ namespace mu2e
             photonYieldDeviation = (photonYieldDeviation+1.0)*_photonYieldScaleFactor;  //global photon yield scale factor for e.g. aging
             photonMaker->SetPhotonYieldDeviation(photonYieldDeviation,SiPM);
           }
+
+          //light propagation of this bar relative to its lookup table
+          unsigned int bar = step.barIndex().asUint();
+          double speedRatio = _fiberSignalSpeedRatios[CRVSectorNumber]*lightPropagation.signalSpeedRatio(bar);
+          photonMaker->SetLightPropagation(speedRatio, lightPropagation.attenuationLengthRatio(bar));
 
           photonMaker->MakePhotons(pos1Local, pos2Local, t1, t2,
                                         avgBeta, charge,
