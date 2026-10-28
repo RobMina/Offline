@@ -1,6 +1,4 @@
 // Calorimeter digi DQM client.
-//
-// Original Author: R. Mina
 
 #include "Offline/CaloDQM/inc/CaloDigiDQM.hh"
 
