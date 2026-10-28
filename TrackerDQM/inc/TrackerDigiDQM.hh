@@ -6,8 +6,6 @@
 // map); the tracker group replaces it with its own. Every axis is a constant
 // here, every histogram is booked in book(), and a change to either bumps
 // kBinningVersion and the catalogue in data/ (Offline/DQMHelpers/README.md).
-//
-// Original Author: R. Mina
 
 #include "Offline/DQMHelpers/inc/DQMClient.hh"
 #include "Offline/DataProducts/inc/StrawId.hh"
