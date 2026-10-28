@@ -1,0 +1,8 @@
+# Tracker DQM histogram catalogue: path, class, x=nbins,lo,hi [y=...], one block per client.
+# Written by DQMHistSet::WriteCatalogue (the DqmTracker* modules' catalogueFile); a job's catalogue must equal this file.
+# TrackerDigiDQM binningVersion=1
+nEvents TH1F x=1,0.5,1.5
+nDigis TH1F x=200,-0.5,199.5
+tdcCal TH1F x=100,0,80000
+panelOccupancy TH1F x=216,-0.5,215.5
+strawOccupancy TH2F x=216,-0.5,215.5 y=96,-0.5,95.5

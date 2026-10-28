@@ -1,0 +1,42 @@
+# Tracker DQM client tables: one per client, offline and online.
+#
+# Each table is the whole configuration of a tracker client (DQMClientFhicl):
+# its `hists` block. There is no binning here; it is fixed in the client.
+#
+#   #include "Offline/TrackerDQM/fcl/prolog.fcl"
+#   trackerDigiDQM : { module_type : DqmTrackerDigi  dqm : @local::TrackerDQM.Digi }
+#
+# Override a table below the include, e.g. per-subrun copies offline:
+#   physics.analyzers.trackerDigiDQM.dqm.hists : @local::DQMHelpers.Hists.PerSubrun
+#
+# Online, rules pick what HistoSender ships: `publish` selects a histogram,
+# `group` collects its copies under one folder. First matching rule wins.
+
+#include "Offline/DQMHelpers/fcl/prolog.fcl"
+
+BEGIN_PROLOG
+
+TrackerDQM : {
+
+  # --- offline --------------------------------------------------------------
+  Digi : { hists : @local::DQMHelpers.Hists.JobOnly }
+
+  # --- online (otsdaq TrackerDigiDQMOnline) ---------------------------------
+  DigiOnline : {
+    hists : {
+      @table::DQMHelpers.Hists.Online
+      rules : [
+        # Occupancy over the last 50000 EWTs as well as the whole run.
+        { match    : "panelOccupancy"
+          modes    : [ "job", "window" ]
+          window   : { span : 50000  unit : "ewt"  subdivisions : 10 }
+          liveName : "panelOccupancyLastEwt"
+          publish  : true
+        },
+        { match : "*"  modes : [ "job" ]  publish : true }
+      ]
+    }
+  }
+}
+
+END_PROLOG
