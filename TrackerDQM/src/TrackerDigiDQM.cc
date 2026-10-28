@@ -1,6 +1,4 @@
 // Tracker digi DQM client.
-//
-// Original Author: R. Mina
 
 #include "Offline/TrackerDQM/inc/TrackerDigiDQM.hh"
 
