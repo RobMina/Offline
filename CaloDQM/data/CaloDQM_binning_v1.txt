@@ -1,0 +1,8 @@
+# Calorimeter DQM histogram catalogue: path, class, x=nbins,lo,hi [y=...], one block per client.
+# Written by DQMHistSet::WriteCatalogue (the DqmCalo* modules' catalogueFile); a job's catalogue must equal this file.
+# CaloDigiDQM binningVersion=1
+nEvents TH1F x=1,0.5,1.5
+nDigis TH1F x=500,-0.5,499.5
+t0 TH1F x=400,0,4000
+sipmOccupancy TH1F x=2716,-0.5,2715.5
+peakAdcVsSiPM TH2F x=2716,-0.5,2715.5 y=64,0,4096
