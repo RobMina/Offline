@@ -296,6 +296,12 @@ namespace mu2e {
 
     saveSimParticleStart(trk);
 
+    if (_steppingAction->boundaryRecorder().enabled()) {
+      const auto key = perThreadObjects_->simParticleHelper->particleKeyFromG4TrackID(trk->GetTrackID());
+      const auto saved = _transientMap.find(key);
+      _steppingAction->boundaryRecorder().start(*trk, saved == _transientMap.end() ? nullptr : &saved->second);
+    }
+
     Mu2eG4UserHelpers::controlTrajectorySaving(trk, _sizeLimit, _currentSize,
                                                _saveTrajectoryMomentumCut);
 
@@ -319,6 +325,8 @@ namespace mu2e {
 
     // Finalize the SimParticle
     saveSimParticleEnd(trk);
+
+    _steppingAction->boundaryRecorder().stop(*trk);
 
     // If this particle passes the cuts, add the trajectory
     // information to the data product.

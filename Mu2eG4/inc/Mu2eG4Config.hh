@@ -39,6 +39,11 @@ namespace mu2e {
       fhicl::Atom<int> navigatorVerbosityLevel {Name("navigatorVerbosityLevel"), 0};
       fhicl::Atom<int> PiENuPolicyVerbosity {Name("PiENuPolicyVerbosity"), 0};
       fhicl::Atom<int> mtDebugOutput {Name("mtDebugOutput"), 0};
+      // Empty prefix disables every boundary-recorder hook and all diagnostic I/O.
+      fhicl::Atom<std::string> boundaryRecorderPrefix {Name("boundaryRecorderPrefix"), ""};
+      fhicl::Sequence<std::string> boundaryRecorderRoots {Name("boundaryRecorderRoots"), {}};
+      fhicl::Atom<unsigned long long> boundaryRecorderMaxRows {Name("boundaryRecorderMaxRows"), 1000000ULL};
+      fhicl::Atom<unsigned long long> boundaryRecorderMaxBytes {Name("boundaryRecorderMaxBytes"), 1073741824ULL};
 
       // fhicl::OptionalTuple<int,double,int> ionToGenerate { Name("ionToGenerate"), std::tuple<int,double>{1000591349, 0.163100 , 1} }; // particle code, excitation energy float level base index; experts only
       fhicl::OptionalTuple<int,double,int> ionToGenerate { Name("ionToGenerate") };

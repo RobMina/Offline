@@ -52,7 +52,8 @@ namespace mu2e {
     _debugEventList(debug.eventList()),
     _debugTrackList(debug.trackList()),
 
-    _spHelper()
+    _spHelper(),
+    boundaryRecorder_(debug)
   {
     if( (!tvd_time_.empty()) && (G4Threading::G4GetThreadId() <= 0) ) {
       G4cout << "Time virtual detector is enabled. Particles are recorded at";
@@ -117,6 +118,8 @@ namespace mu2e {
 
 
   void Mu2eG4SteppingAction::UserSteppingAction(const G4Step* step){
+
+    boundaryRecorder_.step(*step);
 
     ++numTrackSteps_;
 

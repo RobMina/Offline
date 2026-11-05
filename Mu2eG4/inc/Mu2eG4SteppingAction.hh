@@ -15,6 +15,7 @@
 #include "Offline/MCDataProducts/inc/MCTrajectoryPoint.hh"
 #include "Offline/Mu2eG4/inc/IMu2eG4Cut.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4Config.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4BoundaryRecorder.hh"
 
 // G4 includes
 #include "CLHEP/Vector/ThreeVector.h"
@@ -48,6 +49,8 @@ namespace mu2e {
     void UserSteppingAction(const G4Step*);
 
     void BeginOfEvent(StepPointMCCollection* outputHits, const SimParticleHelper& spHelper);
+
+    Mu2eG4BoundaryRecorder& boundaryRecorder() { return boundaryRecorder_; }
 
     void BeginOfTrack();
     void EndOfTrack();
@@ -123,6 +126,8 @@ namespace mu2e {
 
     // per-volume or the default
     double mcTrajectoryMinDistanceCut(const G4VPhysicalVolume* vol) const;
+
+    Mu2eG4BoundaryRecorder boundaryRecorder_;
   };
 
 } // end namespace mu2e

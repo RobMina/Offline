@@ -87,6 +87,8 @@ namespace mu2e {
     art::Event *_artEvent = perThreadObjects_->artEvent;
     SimParticleHelper *_spHelper = &perThreadObjects_->simParticleHelper.value();
 
+    _steppingAction->boundaryRecorder().begin(_artEvent->id(), *evt, *_spHelper);
+
     // local Mu2e timer, almost equal to time of G4EventManager::ProcessOneEvent()
     _timer->Start();
 
@@ -142,6 +144,10 @@ namespace mu2e {
       event_passes = true;
     }
 
+
+    _steppingAction->boundaryRecorder().end(*evt, event_passes,
+        _trackingAction->nG4Tracks(), _trackingAction->overflowSimParticles(),
+        _trackingAction->nKilledStepLimit(), _trackingAction->nKilledByFieldPropagator());
 
     if (event_passes) {
 

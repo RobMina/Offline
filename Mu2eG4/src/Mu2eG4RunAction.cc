@@ -7,6 +7,7 @@
 
 //Mu2e includes
 #include "Offline/Mu2eG4/inc/Mu2eG4RunAction.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4PlacementInventory.hh"
 #include "Offline/Mu2eG4/inc/PhysicalVolumeHelper.hh"
 #include "Offline/Mu2eG4/inc/PhysicsProcessInfo.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4TrackingAction.hh"
@@ -74,6 +75,10 @@ namespace mu2e {
     _trackingAction->beginRun( _physVolHelper, _processInfo, originInWorld );
     _steppingAction->beginRun( _processInfo, originInWorld );
     _steppingAction->finishConstruction();
+    // Optional all-world native placement inventory; separate output suffix.
+    if (!debug_.boundaryRecorderPrefix().empty()) {
+      Mu2eG4PlacementInventory::write(debug_, aRun->GetRunID());
+    }
     G4Navigator* navigator =
       G4TransportationManager::GetTransportationManager()->GetNavigatorForTracking();
     navigator->CheckMode(debug_.navigatorCheckMode());
