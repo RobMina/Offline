@@ -1,0 +1,17 @@
+// Source-faithful v10 CMB policy is hideCRVCMBs=true, not a full-electronics variant.
+#include "Offline/Mu2eG4/geom/crv_counters_v10.txt"
+string detector.name = "component-capture-crv-r1-v10";
+bool hasCosmicRayShield = true;
+string hall.insideMaterialName = "G4_AIR";
+bool g4.forceAuxEdgeVisible = true;
+bool g4.doSurfaceCheck = true;
+string world.materialName = "G4_Galactic";
+bool world.boxVisible = false;
+bool world.boxSolid = false;
+double world.halfLength = 5000.;
+double world.outerLayerThickness = 1.;
+string captureCRV.sector = "CRV_R1";
+int captureCRV.module = 0;
+double captureCRV.clearance = 0.001;
+vector<double> captureCRV.translation = {0., 0., 0.};
+vector<double> captureCRV.localToWorld = {1., 0., 0., 0., 1., 0., 0., 0., 1.};

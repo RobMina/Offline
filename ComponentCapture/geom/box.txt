@@ -1,0 +1,6 @@
+// A real finite material envelope, not a CRV module or an infinite scoring plane.
+vector<double> captureBox.halfLengths = {50., 50., 50.};
+string captureBox.material = "G4_POLYSTYRENE";
+vector<double> captureBox.translation = {0., 0., 0.};
+// Row-major proper R: x_world = R*x_local + translation; dimensionless, determinant +1.
+vector<double> captureBox.localToWorld = {1., 0., 0., 0., 1., 0., 0., 0., 1.};

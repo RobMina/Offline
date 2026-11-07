@@ -1,0 +1,26 @@
+# Read persisted diagnostic products only; no generator, Geant4 producer or status injection.
+process_name: ComponentZeroStepReadback
+source: { module_type: RootInput fileNames: ["component-zero-step.art"] maxEvents: -1 }
+services: {
+  scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+  TFileService: { fileName: "component-zero-step-readback.root" }
+}
+physics: {
+  analyzers: {
+    dump: {
+      module_type: ComponentCaptureDump
+      source: "g4run:componentCapture:ComponentZeroStepEngine"
+      status: "g4run::ComponentZeroStepEngine"
+      failOnInvalid: false
+    }
+    finalization: {
+      module_type: ComponentZeroStepDump
+      diagnosticOnly: true
+      source: "g4run:componentCapture:ComponentZeroStepEngine"
+      sims: "g4run::ComponentZeroStepEngine"
+      status: "g4run::ComponentZeroStepEngine"
+    }
+  }
+  allEventDump: [dump, finalization]
+  end_paths: [allEventDump]
+}

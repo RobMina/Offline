@@ -1,0 +1,7 @@
+# Same local entrance state as crv-r1.fcl under a proper rigid transform.
+#include "Offline/ComponentCapture/fcl/crv-r1.fcl"
+process_name: ComponentCaptureCRVR1Rotated
+source.firstRun: 7
+services.SeedService.baseSeed: 314559
+services.GeometryService.inputFile: "Offline/ComponentCapture/geom/crv-r1-v10-rotated.txt"
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/crv-r1-rotated-primary.txt"

@@ -1,0 +1,20 @@
+// R*(-1000,0,0)+t and R*(1,0,0), with the same local state as crv-r1-primary.txt.
+bool particleGun.do = true;
+int particleGun.id = 13;
+double particleGun.mean = -1.;
+string particleGun.momentumMode = "flat";
+double particleGun.pmin = 1000.;
+double particleGun.pmax = 1000.;
+double particleGun.czmin = -0.6;
+double particleGun.czmax = -0.6;
+double particleGun.phimin = 0.9272952180016122;
+double particleGun.phimax = 0.9272952180016122;
+double particleGun.tmin = 0.;
+double particleGun.tmax = 0.;
+vector<double> particleGun.point = {-357., -727., 641.};
+vector<double> particleGun.halfLength = {0., 0., 0.};
+string particleGun.sourceShape = "box";
+bool particleGun.useDetectorCoordinateSystem = false;
+bool particleGun.doHistograms = false;
+bool particleGun.doNtuples = false;
+bool particleGun.verbose = false;

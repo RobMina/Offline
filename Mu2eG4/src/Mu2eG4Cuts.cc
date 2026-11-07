@@ -10,6 +10,7 @@
 #include "cetlib_except/exception.h"
 #include "fhiclcpp/ParameterSet.h"
 #include "art/Framework/Principal/Event.h"
+#include "art/Utilities/make_tool.h"
 #include "art/Framework/Core/ProducesCollector.h"
 #include "art/Framework/Core/ConsumesCollector.h"
 #include "canvas/Utilities/InputTag.h"
@@ -741,6 +742,8 @@ namespace mu2e {
     if(pset.is_empty()) return make_unique<Constant>(false, lim); // no cuts
 
     const string cuttype =  pset.get<string>("type");
+
+    if(cuttype == "tool") return art::make_tool<IMu2eG4Cut>(pset.get<fhicl::ParameterSet>("tool"));
 
     if(cuttype == "union") return make_unique<Union>(pset, lim);
     if(cuttype == "intersection") return make_unique<Intersection>(pset, lim);

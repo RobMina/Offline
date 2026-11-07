@@ -1,0 +1,8 @@
+# Fixed electronics-directed smoke; GDML preserves the constructed material definitions.
+#include "Offline/ComponentCapture/fcl/crv-r1.fcl"
+process_name: ComponentCaptureCRVR1FEB
+source.firstRun: 8
+services.SeedService.baseSeed: 314659
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/crv-r1-feb-primary.txt"
+physics.producers.g4run.debug.writeGDML: true
+physics.producers.g4run.debug.GDMLFileName: "crv-r1-feb.gdml"

@@ -1,0 +1,21 @@
+// One fixed mu- state in study-world coordinates; units are mm, ns, MeV/c.
+bool particleGun.do = true;
+int particleGun.id = 13;
+double particleGun.mean = -1.;
+string particleGun.momentumMode = "flat";
+double particleGun.pmin = 1000.;
+double particleGun.pmax = 1000.;
+double particleGun.czmin = 1.;
+double particleGun.czmax = 1.;
+double particleGun.phimin = 0.;
+double particleGun.phimax = 0.;
+double particleGun.tmin = 0.;
+double particleGun.tmax = 0.;
+// A 1 um vacuum gap avoids ambiguous creation exactly on a G4 boundary.
+vector<double> particleGun.point = {0., 0., -50.001};
+vector<double> particleGun.halfLength = {0., 0., 0.};
+string particleGun.sourceShape = "box";
+bool particleGun.useDetectorCoordinateSystem = false;
+bool particleGun.doHistograms = false;
+bool particleGun.doNtuples = false;
+bool particleGun.verbose = false;

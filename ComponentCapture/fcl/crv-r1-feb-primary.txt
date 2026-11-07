@@ -1,0 +1,20 @@
+// Through the source-derived centers of FEBs 3 and 0, without changing the component geometry.
+bool particleGun.do = true;
+int particleGun.id = 13;
+double particleGun.mean = -1.;
+string particleGun.momentumMode = "flat";
+double particleGun.pmin = 1000.;
+double particleGun.pmax = 1000.;
+double particleGun.czmin = 0.;
+double particleGun.czmax = 0.;
+double particleGun.phimin = 0.;
+double particleGun.phimax = 0.;
+double particleGun.tmin = 0.;
+double particleGun.tmax = 0.;
+vector<double> particleGun.point = {-1000., -2035., -63.};
+vector<double> particleGun.halfLength = {0., 0., 0.};
+string particleGun.sourceShape = "box";
+bool particleGun.useDetectorCoordinateSystem = false;
+bool particleGun.doHistograms = false;
+bool particleGun.doNtuples = false;
+bool particleGun.verbose = false;

@@ -1,0 +1,44 @@
+# Experimental 100-event recorder smoke, not a certified component response bank.
+#include "Offline/fcl/standardServices.fcl"
+#include "Offline/ComponentCapture/fcl/prolog.fcl"
+
+process_name: ComponentCaptureSmoke
+source: { module_type: EmptyEvent maxEvents: 100 }
+services: {
+  @table::Services.Sim
+  scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+  TFileService: { fileName: "component-capture-smoke.root" }
+  GeometryService: {
+    @table::Services.Sim.GeometryService
+    inputFile: "Offline/ComponentCapture/geom/smoke-box.txt"
+    simulatedDetector: { tool_type: ConstructCaptureBox }
+  }
+  SeedService: {
+    @table::automaticSeeds
+    policy: "autoIncrement"
+    baseSeed: 314159
+    maxUniqueEngines: 20
+  }
+}
+physics: {
+  producers: {
+    generate: {
+      module_type: EventGenerator
+      inputfile: "Offline/ComponentCapture/fcl/smoke-primary.txt"
+      allowReplacement: false
+      messageOnReplacement: true
+    }
+    g4run: @local::componentCaptureSmokeG4
+  }
+  analyzers: {
+    dump: {
+      module_type: ComponentCaptureDump
+      source: "g4run:componentCapture"
+    }
+  }
+  # No event filter, SD filter, output selection, or compression module is scheduled.
+  allEvents: [generate, g4run]
+  allEventDump: [dump]
+  trigger_paths: [allEvents]
+  end_paths: [allEventDump]
+}

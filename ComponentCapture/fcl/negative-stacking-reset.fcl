@@ -1,0 +1,7 @@
+# Diagnostic-only invalid events test consecutive buffer reset, not physical zero response.
+#include "Offline/ComponentCapture/fcl/negative-stacking.fcl"
+process_name: ComponentStackingReset
+source.maxEvents: 3
+source.firstRun: 11
+services.SeedService.baseSeed: 314959
+physics.analyzers.dump.failOnInvalid: false

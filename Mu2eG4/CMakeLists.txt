@@ -20,6 +20,7 @@ cet_make_library(
       src/checkForOverlaps.cc
       src/checkParticleCodeForG4.cc
       src/constructCRV.cc
+      src/constructCRVElectronicsMaterials.cc
       src/constructDiskCalorimeter.cc
       src/constructDS.cc
       src/constructDummyStoppingTarget.cc
@@ -142,7 +143,7 @@ cet_make_library(
       src/WorldMaker.cc
       src/writePhysicalVolumes.cc
     LIBRARIES PUBLIC
-      
+      art::Utilities
       Offline::BeamlineGeom
       Offline::BFieldGeom
       Offline::CalorimeterGeom

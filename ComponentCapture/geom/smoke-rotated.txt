@@ -1,0 +1,13 @@
+// R = Rz(atan2(4,3))*Ry(asin(0.6)); the source is transformed with the same R and t.
+string detector.name = "component-capture-smoke-rotated";
+bool g4.forceAuxEdgeVisible = true;
+bool g4.doSurfaceCheck = true;
+string world.materialName = "G4_Galactic";
+bool world.boxVisible = false;
+bool world.boxSolid = false;
+double world.halfLength = 500.;
+double world.outerLayerThickness = 1.;
+vector<double> captureBox.halfLengths = {50., 50., 50.};
+string captureBox.material = "G4_POLYSTYRENE";
+vector<double> captureBox.translation = {123., -87., 41.};
+vector<double> captureBox.localToWorld = {0.48, -0.8, 0.36, 0.64, 0.6, 0.48, -0.6, 0., 0.8};

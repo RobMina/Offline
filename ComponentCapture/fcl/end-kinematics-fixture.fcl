@@ -1,0 +1,24 @@
+# Constructed helper contracts only; no generator, Mu2eG4 engine or physical event products.
+process_name: ComponentEndKinematicsFixture
+source: {
+  module_type: EmptyEvent
+  maxEvents: 1
+  firstRun: 16
+  firstSubRun: 0
+  firstEvent: 1
+}
+services: {
+  scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+  TFileService: { fileName: "component-end-kinematics-fixture.root" }
+}
+physics: {
+  analyzers: {
+    fixture: {
+      module_type: ComponentEndKinematicsFixture
+      diagnosticOnly: true
+      expectedRun: 16
+    }
+  }
+  helperContracts: [fixture]
+  end_paths: [helperContracts]
+}

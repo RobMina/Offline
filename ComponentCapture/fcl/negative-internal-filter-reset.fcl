@@ -1,0 +1,4 @@
+# Allow only this negative fixture to reach the analyzer with deliberately missing products.
+#include "Offline/ComponentCapture/fcl/negative-internal-filter.fcl"
+process_name: ComponentInternalFilterReset
+physics.producers.g4run.errorOnFailureToPut: false

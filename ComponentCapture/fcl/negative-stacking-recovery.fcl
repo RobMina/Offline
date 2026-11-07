@@ -1,0 +1,11 @@
+# Fixed reject/accept sequence through one real Mu2eG4 recorder; never a response-bank sample.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentStackingRecovery
+source.maxEvents: 4
+source.firstRun: 13
+services.SeedService.baseSeed: 315159
+physics.producers.g4run.Mu2eG4StackingOnlyCut: {
+  type: tool
+  tool: { tool_type: ComponentCaptureTestGate diagnosticOnly: true rejectEvents: [1, 3] }
+}
+physics.analyzers.dump.failOnInvalid: false
