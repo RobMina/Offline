@@ -21,6 +21,7 @@
 #include "Geant4/G4VProcess.hh"
 
 #include "Offline/Mu2eG4/inc/IMu2eG4Cut.hh"
+#include "Offline/Mu2eG4/inc/OutwardCylinder.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4ResourceLimits.hh"
 #include "Offline/MCDataProducts/inc/ProcessCode.hh"
 #include "Offline/Mu2eG4/inc/SimParticleHelper.hh"
@@ -329,6 +330,47 @@ namespace mu2e {
       }
     }
 
+
+    //================================================================
+    class OutwardCylinderCut: public IOHelper {
+    public:
+      explicit OutwardCylinderCut(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim);
+      bool steppingActionCut(const G4Step *step) override;
+      bool stackingActionCut(const G4Track *trk) override;
+    private:
+      OutwardCylinder cylinder_;
+    };
+
+    OutwardCylinderCut::OutwardCylinderCut(const fhicl::ParameterSet& pset, const Mu2eG4ResourceLimits& lim)
+      : IOHelper(pset, lim)
+      , cylinder_{{{0., 0.}}, pset.get<double>("radius"),
+                  pset.get<double>("zMin"), pset.get<double>("zMax")}
+    {
+      const auto axis = pset.get<vector<double>>("axisXY");
+      if(axis.size() != 2) {
+        throw cet::exception("CONFIG") << "outwardCylinder: axisXY must contain exactly two doubles. "
+                                       << "Error in pset = " << pset.to_string() << "\n";
+      }
+      cylinder_.axisXY = {{axis[0], axis[1]}};
+      if(!cylinder_.valid()) {
+        throw cet::exception("CONFIG") << "outwardCylinder: axisXY, radius, zMin and zMax must be finite, "
+                                       << "with radius > 0 and zMin < zMax. Error in pset = "
+                                       << pset.to_string() << "\n";
+      }
+    }
+
+    bool OutwardCylinderCut::steppingActionCut(const G4Step *step) {
+      const auto* post = step->GetPostStepPoint();
+      const bool result = cylinder_.leavingWorld(post->GetPosition(), post->GetMomentumDirection(), mu2eOrigin_);
+      if(result && steppingOutput_) {
+        addHit(step);
+      }
+      return result;
+    }
+
+    bool OutwardCylinderCut::stackingActionCut(const G4Track *trk) {
+      return cylinder_.leavingWorld(trk->GetPosition(), trk->GetMomentumDirection(), mu2eOrigin_);
+    }
 
     //================================================================
     class PlaneHelper {
@@ -745,6 +787,7 @@ namespace mu2e {
     if(cuttype == "union") return make_unique<Union>(pset, lim);
     if(cuttype == "intersection") return make_unique<Intersection>(pset, lim);
     if(cuttype == "plane") return make_unique<Plane>(pset, lim);
+    if(cuttype == "outwardCylinder") return make_unique<OutwardCylinderCut>(pset, lim);
     if(cuttype == "observerPlane") return make_unique<ObserverPlane>(pset, lim);
 
     if(cuttype == "inVolume") return make_unique<VolumeCut>(pset, false, lim);

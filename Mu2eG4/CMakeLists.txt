@@ -304,6 +304,10 @@ cet_build_plugin(GammaConvGenerator art::module
       Offline::MCDataProducts
 )
 
+cet_make_exec(NAME OutwardCylinderTest
+    SOURCE src/OutwardCylinderTest_main.cc
+)
+
 install(DIRECTORY g4study DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/Offline/Mu2eG4)
 install(DIRECTORY geom DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/Offline/Mu2eG4)
 install(DIRECTORY test DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/Offline/Mu2eG4)

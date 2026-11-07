@@ -314,6 +314,8 @@ helper.make_plugins( [
                      [ g4LibInc, vgcLibInc ]
                      )
 
+helper.make_bin("OutwardCylinderTest", [], [])
+
 # This tells emacs to view this file in python mode.
 # Local Variables:
 # mode:python
