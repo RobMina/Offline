@@ -1,0 +1,7 @@
+# Fixed photon transport, with all outcomes retained.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentPhoton
+source.maxEvents: 1
+source.firstRun: 9
+services.SeedService.baseSeed: 314759
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/smoke-photon-primary.txt"

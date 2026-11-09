@@ -1,0 +1,30 @@
+# Separate persisted-product readback; no Geant4 producer or observer.
+process_name: ComponentSecondaryZeroStepReadback
+source: {
+  module_type: RootInput
+  fileNames: ["component-secondary-zero-step.art"]
+  maxEvents: -1
+}
+services: {
+  scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+  TFileService: { fileName: "component-secondary-zero-step-readback.root" }
+}
+physics: {
+  analyzers: {
+    dump: {
+      module_type: ComponentCaptureDump
+      source: "g4run:componentCapture:ComponentSecondaryZeroStep"
+      status: "g4run::ComponentSecondaryZeroStep"
+      failOnInvalid: false
+    }
+    finalization: {
+      module_type: ComponentZeroStepDump
+      diagnosticOnly: true
+      source: "g4run:componentCapture:ComponentSecondaryZeroStep"
+      sims: "g4run::ComponentSecondaryZeroStep"
+      status: "g4run::ComponentSecondaryZeroStep"
+    }
+  }
+  allEventDump: [dump, finalization]
+  end_paths: [allEventDump]
+}

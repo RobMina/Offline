@@ -1,0 +1,29 @@
+# Constructed G4 objects and recorder callbacks only; no Mu2eG4 transport or StatusG4 product.
+process_name: ComponentCallbackFixture
+source: { module_type: EmptyEvent maxEvents: 13 firstRun: 14 }
+services: {
+  scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+  TFileService: { fileName: "component-callback-fixture.root" }
+}
+physics: {
+  producers: {
+    fixture: {
+      module_type: ComponentRecorderCallbackFixture
+      diagnosticOnly: true
+      errorOnFailureToPut: false
+      inputs: { primaryType: GenParticles primaryTag: unusedCallbackFixtureInput }
+    }
+  }
+  analyzers: {
+    dump: {
+      module_type: ComponentCaptureDump
+      source: "fixture:componentCapture"
+      status: "fixture"
+      failOnInvalid: false
+    }
+  }
+  callbacks: [fixture]
+  allEventDump: [dump]
+  trigger_paths: [callbacks]
+  end_paths: [allEventDump]
+}

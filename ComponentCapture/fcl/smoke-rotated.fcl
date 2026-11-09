@@ -1,0 +1,8 @@
+# Independent-seed transformed-box diagnostic, not a production response bank.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentCaptureRotatedSmoke
+source.firstRun: 2
+services.SeedService.baseSeed: 314259
+services.GeometryService.inputFile: "Offline/ComponentCapture/geom/smoke-rotated.txt"
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/smoke-rotated-primary.txt"
+physics.producers.g4run.Mu2eG4CommonCut.tool.geometryTag: "smoke-box-rotated-v1"

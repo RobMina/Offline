@@ -1,0 +1,29 @@
+# Engine-created children with diagnostic status injection, never physical response donors.
+#include "Offline/ComponentCapture/fcl/smoke-stopping.fcl"
+process_name: ComponentSecondaryZeroStep
+services.TFileService.fileName: "component-secondary-zero-step.root"
+physics.producers.g4run.Mu2eG4CommonCut: {
+  type: tool
+  tool: {
+    tool_type: ComponentSecondaryZeroStepProbe
+    diagnosticOnly: true
+    expectedRun: 10
+    mode: "classification"
+  }
+}
+physics.analyzers.dump.failOnInvalid: false
+physics.analyzers.finalization: {
+  module_type: ComponentZeroStepDump
+  diagnosticOnly: true
+  source: "g4run:componentCapture"
+  sims: "g4run"
+  status: "g4run"
+}
+physics.allEventDump: [dump, finalization]
+outputs.persist: {
+  module_type: RootOutput
+  fileName: "component-secondary-zero-step.art"
+  outputCommands: ["keep *"]
+}
+physics.persistAll: [persist]
+physics.end_paths: [allEventDump, persistAll]

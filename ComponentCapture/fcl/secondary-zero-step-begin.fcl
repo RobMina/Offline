@@ -1,0 +1,3 @@
+# A separate one-event arm preserves exactly the same primary RNG input.
+#include "Offline/ComponentCapture/fcl/secondary-zero-step-classification.fcl"
+physics.producers.g4run.Mu2eG4CommonCut.tool.mode: "begin"

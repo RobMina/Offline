@@ -1,0 +1,10 @@
+# Initialization-only regression of the standard material path, without the capture tool.
+#include "Offline/Mu2eG4/fcl/gdmldump_run1_a.fcl"
+process_name: ComponentStandardMaterials
+source.firstRun: 6
+source.maxEvents: 1
+services.SeedService.baseSeed: 314459
+services.scheduler: { num_threads: 1 num_schedules: 1 wantSummary: true }
+physics.producers.g4run.debug.writeGDML: false
+physics.producers.g4run.debug.printMaterials: true
+physics.producers.g4run.Mu2eG4StackingOnlyCut: { type: constant value: true }

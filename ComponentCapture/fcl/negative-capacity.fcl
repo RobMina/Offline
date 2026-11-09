@@ -1,0 +1,5 @@
+# Must abort rather than silently truncate a component history.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+source.maxEvents: 1
+source.firstRun: 3
+physics.producers.g4run.Mu2eG4CommonCut.tool.maxSteps: 1

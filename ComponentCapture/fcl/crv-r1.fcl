@@ -1,0 +1,10 @@
+# One-event canonical side-module candidate; user build and inventory audit required.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentCaptureCRVR1
+source.maxEvents: 1
+source.firstRun: 5
+services.SeedService.baseSeed: 314359
+services.GeometryService.inputFile: "Offline/ComponentCapture/geom/crv-r1-v10.txt"
+services.GeometryService.simulatedDetector: { tool_type: ConstructCaptureCRVModule }
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/crv-r1-primary.txt"
+physics.producers.g4run.Mu2eG4CommonCut.tool.geometryTag: "crv-v10-R1-module0-source-CMB-policy-v1"

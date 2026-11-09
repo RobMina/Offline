@@ -1,0 +1,27 @@
+# Test-only terminal-status injection; real engine callbacks/products, never physics response trials.
+#include "Offline/ComponentCapture/fcl/smoke-photon.fcl"
+process_name: ComponentZeroStepEngine
+source.maxEvents: 2
+source.firstRun: 15
+services.SeedService.baseSeed: 315259
+services.TFileService.fileName: "component-zero-step.root"
+physics.producers.g4run.Mu2eG4CommonCut: {
+  type: tool
+  tool: { tool_type: ComponentZeroStepProbe diagnosticOnly: true expectedRun: 15 }
+}
+physics.analyzers.dump.failOnInvalid: false
+physics.analyzers.finalization: {
+  module_type: ComponentZeroStepDump
+  diagnosticOnly: true
+  source: "g4run:componentCapture"
+  sims: "g4run"
+  status: "g4run"
+}
+physics.allEventDump: [dump, finalization]
+outputs.persist: {
+  module_type: RootOutput
+  fileName: "component-zero-step.art"
+  outputCommands: ["keep *"]
+}
+physics.persistAll: [persist]
+physics.end_paths: [allEventDump, persistAll]

@@ -30,6 +30,7 @@
 #include "Offline/Mu2eG4/inc/PhysicalVolumeHelper.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4SteppingAction.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4TrackingAction.hh"
+#include "Offline/Mu2eG4/inc/IMu2eG4Observer.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4UserTrackInformation.hh"
 #include "Offline/Mu2eG4/inc/SimParticleHelper.hh"
 #include "Offline/Mu2eG4/inc/SimParticlePrimaryHelper.hh"
@@ -295,6 +296,8 @@ namespace mu2e {
     // but after attaching the  user track information
 
     saveSimParticleStart(trk);
+    if (auto* observer = dynamic_cast<IMu2eG4Observer*>(perThreadObjects_->commonCuts.get()))
+      observer->beginTrack(trk);
 
     Mu2eG4UserHelpers::controlTrajectorySaving(trk, _sizeLimit, _currentSize,
                                                _saveTrajectoryMomentumCut);
@@ -313,6 +316,9 @@ namespace mu2e {
 
 
   void Mu2eG4TrackingAction::PostUserTrackingAction(const G4Track* trk){
+
+    if (auto* observer = dynamic_cast<IMu2eG4Observer*>(perThreadObjects_->commonCuts.get()))
+      observer->endTrack(trk);
 
     // This is safe even if it was never started.
     _timer.stop();

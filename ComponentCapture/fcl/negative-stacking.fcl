@@ -1,0 +1,5 @@
+# The common observer must see a short-circuited stacking rejection and invalidate capture.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+source.maxEvents: 1
+source.firstRun: 4
+physics.producers.g4run.Mu2eG4StackingOnlyCut: { type: constant value: true }

@@ -1,0 +1,8 @@
+# No SD hits can pass internal filtering; every missing capture must remain invalid.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentInternalFilter
+source.maxEvents: 3
+source.firstRun: 12
+services.SeedService.baseSeed: 315059
+physics.producers.g4run.G4InteralFiltering: true
+physics.analyzers.dump.failOnInvalid: false

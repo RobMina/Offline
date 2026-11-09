@@ -25,6 +25,7 @@
 
 // Mu2e includes
 #include "Offline/Mu2eG4/inc/ConstructMaterials.hh"
+#include "Offline/Mu2eG4/inc/constructCRVElectronicsMaterials.hh"
 #include "Offline/Mu2eG4/inc/findMaterialOrThrow.hh"
 #include "Offline/Mu2eG4/inc/setBirksConstant.hh"
 #include "Offline/DetectorSolenoidGeom/inc/DetectorSolenoid.hh"
@@ -238,12 +239,7 @@ namespace mu2e {
       HeavyConcrete->AddElement( getElementOrThrow("Sr"), 6.4097E-4);  //Strontium
     }
 
-    mat = uniqueMaterialOrThrow( "Polyethylene");
-    {
-      G4Material* Polyethylene = new G4Material( mat.name, 0.956*CLHEP::g/CLHEP::cm3, 2);
-      Polyethylene->AddElement( getElementOrThrow("C"), 1);
-      Polyethylene->AddElement( getElementOrThrow("H"), 2);
-    }
+    constructCRVPolyethylene();
 
 
     mat = uniqueMaterialOrThrow( "Half_Poly" );
@@ -762,32 +758,7 @@ namespace mu2e {
       DC704->AddElement(getElementOrThrow("Si"),3);
     }
 
-    mat = uniqueMaterialOrThrow( "Electronics" );
-    {
-      // This material based on measurements at Argonne of some Mu2e
-      // electronics by Gary Drake, conveyed by Vitaly Pronskikh
-      G4Material* Electronics = new G4Material( mat.name, 0.58*CLHEP::g/CLHEP::cm3, 5);
-      Electronics->AddElement( getElementOrThrow("Si"),             0.103);
-      Electronics->AddElement( getElementOrThrow("Al"),             0.034);
-      Electronics->AddElement( getElementOrThrow("Au"),             0.034);
-      Electronics->AddElement( getElementOrThrow("Cu"),             0.691);
-      Electronics->AddMaterial( findMaterialOrThrow("Polyethylene"), 0.138);
-    }
-
-    // These are needed (i) for MARS to have unique materials, and (ii)
-    // in case electronics board materials vary.
-
-    mat = uniqueMaterialOrThrow( "ElectronicsFEB" );
-    {
-      G4Material* ElectronicsFEB = new G4Material(mat.name, 0.58*CLHEP::g/CLHEP::cm3, 1);
-      ElectronicsFEB->AddMaterial( findMaterialOrThrow("Electronics"), 1.0);
-    }
-
-    mat = uniqueMaterialOrThrow( "ElectronicsCMB" );
-    {
-      G4Material* ElectronicsCMB = new G4Material(mat.name, 0.58*CLHEP::g/CLHEP::cm3, 1);
-      ElectronicsCMB->AddMaterial( findMaterialOrThrow("Electronics"), 1.0);
-    }
+    constructCRVElectronicsMaterials(false);
 
     mat = uniqueMaterialOrThrow( "RackElectronics" );
     {

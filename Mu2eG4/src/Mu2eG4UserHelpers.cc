@@ -91,12 +91,16 @@ namespace mu2e {
     }
     // kinetic energy at the point of interaction/decay
     double getEndKE(G4Track const* const trk) {
+      // Zero-step tracks have no intermediate state from Mu2eRecorderProcess.
+      if (trk->GetCurrentStepNumber() == 0) return trk->GetKineticEnergy();
       auto const* uti = dynamic_cast<Mu2eG4UserTrackInformation*>(trk->GetUserInformation());
       return uti->GetKineticEnergy();
     }
 
     // momentum at the point of interaction/decay
     CLHEP::HepLorentzVector getEndMomentum(G4Track const* const trk) {
+      // Use the dynamic particle's four-momentum when no stepping process has acted.
+      if (trk->GetCurrentStepNumber() == 0) return CLHEP::HepLorentzVector(trk->GetMomentum(), trk->GetTotalEnergy());
       auto const* const uti = dynamic_cast<Mu2eG4UserTrackInformation*>(trk->GetUserInformation());
       auto const& pdir = uti->GetMomentumDirection();
       double ke = uti->GetKineticEnergy();

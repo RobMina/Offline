@@ -1,0 +1,7 @@
+# Fixed low-momentum positive muon; ordinary stopping and decay remain enabled.
+#include "Offline/ComponentCapture/fcl/smoke.fcl"
+process_name: ComponentStopping
+source.maxEvents: 1
+source.firstRun: 10
+services.SeedService.baseSeed: 314859
+physics.producers.generate.inputfile: "Offline/ComponentCapture/fcl/smoke-stopping-primary.txt"

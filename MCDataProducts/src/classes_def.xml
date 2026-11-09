@@ -44,6 +44,17 @@
  <class name="art::Wrapper<std::pair<std::string,mu2e::SpectrumConfig::RestrictedVar>>"/>
 
 <!--  ********* simulation  ********* -->
+ <class name="mu2e::ComponentState"/>
+ <class name="mu2e::ComponentClassification"/>
+ <class name="mu2e::ComponentTrack"/>
+ <class name="mu2e::ComponentStep"/>
+ <class name="mu2e::ComponentVolume"/>
+ <class name="mu2e::ComponentCapture"/>
+ <class name="std::vector<mu2e::ComponentClassification>"/>
+ <class name="std::vector<mu2e::ComponentTrack>"/>
+ <class name="std::vector<mu2e::ComponentStep>"/>
+ <class name="std::vector<mu2e::ComponentVolume>"/>
+ <class name="art::Wrapper<mu2e::ComponentCapture>"/>
  <class name="mu2e::StatusG4"/>
  <class name="std::vector<mu2e::StatusG4>"/>
  <class name="art::Wrapper<mu2e::StatusG4>"/>

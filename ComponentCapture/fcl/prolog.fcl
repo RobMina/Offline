@@ -1,0 +1,50 @@
+# Smoke defaults only; the recorder is the sole common cut tool.
+#include "Offline/Mu2eG4/fcl/prolog.fcl"
+
+BEGIN_PROLOG
+componentCaptureSmokeG4: {
+  @table::mu2eg4runDefaultSingleStage
+  module_type: Mu2eG4
+  inputs: { primaryType: GenParticles primaryTag: generate }
+  # The misspelling is the pinned Mu2eG4Config key.
+  G4InteralFiltering: false
+  SDConfig: {
+    enableAllSDs: false
+    enableSD: []
+    TimeVD: { times: [] }
+    minTrackerStepPoints: 0
+  }
+  TrajectoryControl: @local::mu2eg4NoTrajectories
+  Mu2eG4SteppingOnlyCut: {}
+  Mu2eG4StackingOnlyCut: {}
+  Mu2eG4CommonCut: {
+    type: tool
+    tool: {
+      tool_type: ComponentRecorder
+      envelope: "CaptureEnvelope"
+      maxSteps: 1000000
+      maxTracks: 100000
+      geometryTag: "smoke-box-v1"
+      physicsTag: "ShieldingM-range0.01mm-proton0mm-RDoff-fieldoff-v1"
+    }
+  }
+  ResourceLimits: {
+    maxStepsPerTrack: 1000000
+    maxStepPointCollectionSize: 1000000
+    maxSimParticleCollectionSize: 100000
+  }
+  physics: {
+    @table::mu2eg4DefaultPhysics
+    physicsListName: "ShieldingM"
+    minRangeCut: 0.01
+    protonProductionCut: 0.0
+    turnOffRadioactiveDecay: true
+    turnOnRadioactiveDecay: false
+    turnOnThermalNeutronPhysics: false
+    radiationVRmode: false
+    noDecay: []
+    addProcesses: []
+    limitStepInAllVolumes: false
+  }
+}
+END_PROLOG

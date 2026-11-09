@@ -1,0 +1,10 @@
+// Mu2eStudyWorld provides an unrotated vacuum parent centred at the world origin.
+string detector.name = "component-capture-smoke";
+bool g4.forceAuxEdgeVisible = true;
+bool g4.doSurfaceCheck = true;
+string world.materialName = "G4_Galactic";
+bool world.boxVisible = false;
+bool world.boxSolid = false;
+double world.halfLength = 500.;
+double world.outerLayerThickness = 1.;
+#include "Offline/ComponentCapture/geom/box.txt"
