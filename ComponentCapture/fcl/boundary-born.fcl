@@ -1,0 +1,7 @@
+# Constructed surface-born children and recorder callbacks only; no Mu2eG4 transport or StatusG4 product.
+#include "Offline/ComponentCapture/fcl/callback-fixture.fcl"
+process_name: ComponentBoundaryBornFixture
+source.maxEvents: 5
+source.firstRun: 17
+services.TFileService.fileName: "component-boundary-born.root"
+physics.producers.fixture.mode: "boundaryBorn"

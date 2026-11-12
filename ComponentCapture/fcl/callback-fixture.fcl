@@ -19,6 +19,7 @@ physics: {
       module_type: ComponentCaptureDump
       source: "fixture:componentCapture"
       status: "fixture"
+      links: "fixture:componentCaptureLinks"
       failOnInvalid: false
     }
   }

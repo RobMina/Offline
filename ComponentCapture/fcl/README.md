@@ -93,7 +93,8 @@ Run every fixture from a fresh data directory; their relative output filename is
 ## Remaining integration gates
 
 - Exhaust default cuts, internal-filter reject-then-accept recovery and real-engine zero-step/suspension scheduling.
-- Broader module neutral/stopping/passive coverage, boundary-born ownership and other resource failures.
+- Broader module neutral/stopping/passive coverage and other resource failures. Boundary-born ownership, ancestry
+  links, the manifest and the neighbour partition are described in [ownership-accounting.md](ownership-accounting.md).
 - Larger independent-placement distributions with predeclared equivalence criteria; the 100-event comparison is diagnostic only.
 - Complete material/physics/runtime manifests; canonical module construction now has bounded runtime checks.
 

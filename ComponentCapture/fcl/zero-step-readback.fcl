@@ -11,6 +11,7 @@ physics: {
       module_type: ComponentCaptureDump
       source: "g4run:componentCapture:ComponentZeroStepEngine"
       status: "g4run::ComponentZeroStepEngine"
+      links: "g4run:componentCaptureLinks:ComponentZeroStepEngine"
       failOnInvalid: false
     }
     finalization: {

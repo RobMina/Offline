@@ -1,5 +1,6 @@
-// Diagnostic schema-1 export only: these records are never response-bank admissible.
+// Diagnostic schema-1 export with ancestry links and manifest: these records are never response-bank admissible.
 #include <cstdint>
+#include <map>
 #include <string>
 
 #include "TFile.h"
@@ -38,6 +39,8 @@ void stateBranches(TTree* tree, std::string const& prefix, ComponentState& s) {
   branch(tree, prefix + "placement", s.placement); branch(tree, prefix + "material", s.material);
   branch(tree, prefix + "process", s.process); branch(tree, prefix + "stepStatus", s.stepStatus);
 }
+// Mu2eG4TrackingAction exempts only these from its field-propagator count when their range is below rangeToIgnore.
+constexpr int electronPDG = 11, protonPDG = 2212;
 void append(std::string& text, std::string const& message) {
   if (!text.empty()) text += '\n';
   text += message;
@@ -49,23 +52,29 @@ class ComponentCaptureDump : public art::EDAnalyzer {
   struct Config {
     fhicl::Atom<art::InputTag> source{fhicl::Name("source"), art::InputTag("g4run:componentCapture")};
     fhicl::Atom<art::InputTag> status{fhicl::Name("status"), art::InputTag("g4run")};
+    fhicl::Atom<art::InputTag> links{fhicl::Name("links"), art::InputTag("g4run:componentCaptureLinks")};
     fhicl::Atom<bool> failOnInvalid{fhicl::Name("failOnInvalid"), true};
   };
   using Parameters = art::EDAnalyzer::Table<Config>;
   explicit ComponentCaptureDump(Parameters const& p)
-    : art::EDAnalyzer(p), source_(p().source()), statusSource_(p().status()),
+    : art::EDAnalyzer(p), source_(p().source()), statusSource_(p().status()), linksSource_(p().links()),
       failOnInvalid_(p().failOnInvalid()) {
     consumes<ComponentCapture>(source_);
     consumes<StatusG4>(statusSource_);
+    consumes<ComponentCaptureLinks>(linksSource_);
   }
   void beginJob() override;
   void analyze(art::Event const&) override;
 
  private:
   TTree* table(char const* name, char const* title, bool indexed = true);
-  art::InputTag source_, statusSource_;
+  art::InputTag source_, statusSource_, linksSource_;
   bool failOnInvalid_;
-  TTree *events_{}, *tracks_{}, *steps_{}, *classifications_{}, *volumes_{};
+  TTree *events_{}, *tracks_{}, *steps_{}, *classifications_{}, *volumes_{}, *links_{}, *manifest_{};
+  ComponentTrackLink link_;
+  ComponentCaptureLinks linksHeader_;
+  bool linksPresent_{}, linksIDsMatch_{};
+  Long64_t nLinks_{}, nBirthExits_{};
   Long64_t run_{}, subrun_{}, event_{}, index_{};
   Long64_t nTracks_{}, nSteps_{}, nClassifications_{}, nVolumes_{}, nErrors_{};
   // Only header fields are copied here; avoid duplicating the large event collections.
@@ -78,6 +87,7 @@ class ComponentCaptureDump : public art::EDAnalyzer {
   bool complete_{}, bankAdmissible_{false};
   std::string errors_, validationErrors_;
   int g4Status_{}, nG4Tracks_{}, nKilledStepLimit_{}, nKilledByFieldPropagator_{};
+  Long64_t nNaturalBoundaryStops_{};
   bool overflowSimParticles_{};
   float cpuTime_{}, realTime_{};
 };
@@ -123,6 +133,7 @@ void ComponentCaptureDump::beginJob() {
   branch(events_, "overflowSimParticles", overflowSimParticles_);
   branch(events_, "nKilledStepLimit", nKilledStepLimit_);
   branch(events_, "nKilledByFieldPropagator", nKilledByFieldPropagator_);
+  branch(events_, "nNaturalBoundaryStops", nNaturalBoundaryStops_);
   branch(events_, "cpuTime", cpuTime_); branch(events_, "realTime", realTime_);
 
   tracks_ = table("tracks", "Unfiltered captured track records; states are not inferred exits");
@@ -159,6 +170,19 @@ void ComponentCaptureDump::beginJob() {
   branch(volumes_, "motherLogical", volume_.motherLogical); branch(volumes_, "material", volume_.material);
   branch(volumes_, "solid", volume_.solid); branch(volumes_, "density", volume_.density);
   branch(volumes_, "translation", volume_.translation); branch(volumes_, "rotation", volume_.rotation);
+
+  links_ = table("links", "Per-track creating-step links aligned with the tracks table");
+  branch(links_, "track", link_.track); branch(links_, "parent", link_.parent);
+  branch(links_, "creatorStep", link_.creatorStep);
+  branch(links_, "bornOnSurface", link_.bornOnSurface); branch(links_, "exitAtBirth", link_.exitAtBirth);
+
+  manifest_ = table("manifest", "Per-event physics/material/cut manifest of the capture", false);
+  branch(manifest_, "linksPresent", linksPresent_); branch(manifest_, "linksIDsMatch", linksIDsMatch_);
+  branch(manifest_, "schema", linksHeader_.schema);
+  branch(manifest_, "g4Version", linksHeader_.g4Version);
+  branch(manifest_, "manifest", linksHeader_.manifest);
+  branch(manifest_, "manifestHash", linksHeader_.manifestHash);
+  branch(manifest_, "nLinks", nLinks_); branch(manifest_, "nBirthExits", nBirthExits_);
 }
 
 void ComponentCaptureDump::analyze(art::Event const& e) {
@@ -167,7 +191,19 @@ void ComponentCaptureDump::analyze(art::Event const& e) {
   art::Handle<StatusG4> status;
   e.getByLabel(source_, capture);
   e.getByLabel(statusSource_, status);
-  capturePresent_ = capture.isValid(); statusPresent_ = status.isValid();
+  art::Handle<ComponentCaptureLinks> links;
+  e.getByLabel(linksSource_, links);
+  capturePresent_ = capture.isValid(); statusPresent_ = status.isValid(); linksPresent_ = links.isValid();
+  ComponentCaptureLinks const noLinks;
+  auto const& linkRecord = linksPresent_ ? *links : noLinks;
+  linksHeader_.schema = linkRecord.schema; linksHeader_.run = linkRecord.run;
+  linksHeader_.subrun = linkRecord.subrun; linksHeader_.event = linkRecord.event;
+  linksHeader_.g4Version = linkRecord.g4Version; linksHeader_.manifest = linkRecord.manifest;
+  linksHeader_.manifestHash = linkRecord.manifestHash;
+  nLinks_ = linkRecord.tracks.size();
+  nBirthExits_ = 0;
+  for (auto const& row : linkRecord.tracks) nBirthExits_ += row.exitAtBirth;
+  linksIDsMatch_ = linksPresent_ && linkRecord.run == run_ && linkRecord.subrun == subrun_ && linkRecord.event == event_;
   ComponentCapture const empty;
   StatusG4 const unknown;
   auto const& record = capturePresent_ ? *capture : empty;
@@ -191,8 +227,24 @@ void ComponentCaptureDump::analyze(art::Event const& e) {
   overflowSimParticles_ = g4.overflowSimParticles();
   nKilledStepLimit_ = g4.nKilledStepLimit(); nKilledByFieldPropagator_ = g4.nKilledByFieldPropagator();
   cpuTime_ = g4.cpuTime(); realTime_ = g4.realTime();
-  statusClean_ = statusPresent_ && g4Status_ == StatusG4::ok && !overflowSimParticles_
-    && nKilledStepLimit_ == 0 && nKilledByFieldPropagator_ == 0;
+  // Status 1 is clean only when every counted field-propagator kill is a zero-energy same-volume Transportation stop.
+  std::map<std::int64_t, std::size_t> lastStep;
+  for (std::size_t i = 0; i != record.steps.size(); ++i) {
+    auto const found = lastStep.find(record.steps[i].track);
+    if (found == lastStep.end() || record.steps[found->second].number < record.steps[i].number)
+      lastStep[record.steps[i].track] = i;
+  }
+  nNaturalBoundaryStops_ = 0;
+  for (auto const& row : record.tracks) {
+    auto const found = lastStep.find(row.track);
+    if (row.ended && row.stopProcess == "Transportation" && row.end.kinetic == 0. && row.pdg != electronPDG
+        && row.pdg != protonPDG && found != lastStep.end()
+        && record.steps[found->second].pre.placement == record.steps[found->second].post.placement)
+      ++nNaturalBoundaryStops_;
+  }
+  bool const onlyNaturalStops = g4Status_ == 1 && nKilledByFieldPropagator_ == nNaturalBoundaryStops_;
+  statusClean_ = statusPresent_ && !overflowSimParticles_ && nKilledStepLimit_ == 0
+    && (g4Status_ == StatusG4::ok ? nKilledByFieldPropagator_ == 0 : onlyNaturalStops);
   complete_ = record.complete && statusClean_;
   bankAdmissible_ = false; // Experimental even if an input record claims otherwise.
   eventIDsMatch_ = capturePresent_ && record.run == run_ && record.subrun == subrun_ && record.event == event_;
@@ -204,7 +256,10 @@ void ComponentCaptureDump::analyze(art::Event const& e) {
   if (!record.complete) append(validationErrors_, "Capture record is incomplete");
   if (!statusClean_) append(validationErrors_, "StatusG4 is not clean");
   if (!record.errors.empty()) append(validationErrors_, "Capture record contains errors");
-  if (nG4Tracks_ != nTracks_) append(validationErrors_, "StatusG4/captured track census mismatch");
+  if (nG4Tracks_ != nTracks_ - nBirthExits_) append(validationErrors_, "StatusG4/captured track census mismatch");
+  if (capturePresent_ && !linksPresent_) append(validationErrors_, "Missing ComponentCaptureLinks: " + linksSource_.encode());
+  if (linksPresent_ && !linksIDsMatch_) append(validationErrors_, "Links/framework event identity mismatch");
+  if (linksPresent_ && nLinks_ != nTracks_) append(validationErrors_, "Links/captured track census mismatch");
   complete_ = complete_ && eventIDsMatch_ && validationErrors_.empty();
 
   // Never filter a diagnostic row, including incomplete events or killed classifications.
@@ -216,13 +271,16 @@ void ComponentCaptureDump::analyze(art::Event const& e) {
   for (auto const& row : record.tracks) { track_ = row; tracks_->Fill(); ++index_; }
   index_ = 0;
   for (auto const& row : record.steps) { step_ = row; steps_->Fill(); ++index_; }
+  index_ = 0;
+  for (auto const& row : linkRecord.tracks) { link_ = row; links_->Fill(); ++index_; }
+  manifest_->Fill();
   events_->Fill(); // Also emitted when every collection is empty.
 
   // Identity mismatches are hard failures even when diagnostic-only invalid events are allowed.
   bool const identityMismatch = capturePresent_ && !eventIDsMatch_;
   if (identityMismatch || (failOnInvalid_ && !validationErrors_.empty())) {
     // Checkpoint *all* tables before throwing; leave file ownership with TFileService.
-    for (auto* tree : {events_, tracks_, steps_, classifications_, volumes_})
+    for (auto* tree : {events_, tracks_, steps_, classifications_, volumes_, links_, manifest_})
       tree->AutoSave("FlushBaskets SaveSelf");
     events_->GetCurrentFile()->Flush();
     throw cet::exception("ComponentCaptureDump") << "Invalid capture for " << e.id()

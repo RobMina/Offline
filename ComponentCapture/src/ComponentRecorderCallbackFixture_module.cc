@@ -53,12 +53,15 @@ class ComponentRecorderCallbackFixture : public art::EDProducer {
 public:
   struct Config {
     fhicl::Atom<bool> diagnosticOnly{fhicl::Name("diagnosticOnly")};
+    fhicl::Atom<std::string> mode{fhicl::Name("mode"), std::string("callbacks")};
     fhicl::Table<Mu2eG4Config::Inputs_> inputs{fhicl::Name("inputs")};
   };
   using Parameters = art::EDProducer::Table<Config>;
   explicit ComponentRecorderCallbackFixture(const Parameters& p)
-    : art::EDProducer(p), inputs_(p().inputs()), cut_(art::make_tool<IMu2eG4Cut>(recorderConfig())) {
+    : art::EDProducer(p), inputs_(p().inputs()), cut_(art::make_tool<IMu2eG4Cut>(recorderConfig())),
+      boundary_(p().mode()=="boundaryBorn") {
     check(p().diagnosticOnly(), "diagnosticOnly must be true; this is not transport");
+    check(boundary_ || p().mode()=="callbacks", "mode must be callbacks or boundaryBorn");
     check(inputs_.primaryType().id()==Mu2eG4PrimaryType::GenParticles, "Fixture requires GenParticles helper mode");
     observer_=dynamic_cast<IMu2eG4Observer*>(cut_.get());
     check(observer_!=nullptr, "Loaded recorder has no observer interface");
@@ -68,12 +71,16 @@ public:
   void beginJob() override;
   void produce(art::Event&) override;
   void endJob() override {
-    check(seen_==13, "The complete fixed 13-event callback matrix is required");
+    check(seen_==cases(), boundary_ ? "The complete fixed 5-event boundary-born matrix is required"
+                                     : "The complete fixed 13-event callback matrix is required");
   }
 private:
   Mu2eG4Inputs inputs_;
   std::unique_ptr<IMu2eG4Cut> cut_;
   IMu2eG4Observer* observer_=nullptr;
+  bool boundary_=false;
+  unsigned cases() const { return boundary_ ? 5u : 13u; }
+  void produceBoundary(unsigned number);
   std::unique_ptr<G4Box> worldSolid_, envelopeSolid_;
   std::unique_ptr<G4LogicalVolume> worldLogical_, envelopeLogical_;
   std::unique_ptr<G4PVPlacement> world_, envelope_;
@@ -81,7 +88,7 @@ private:
   unsigned seen_=0, run_=0, subrun_=0;
   std::unique_ptr<G4Track> makeTrack(int id, int parent, double z, double time, double direction,
                                    double energy, const G4TouchableHandle&) const;
-  void start(G4Track&);
+  void start(G4Track&, bool expectKilled=false);
   G4ThreeVector step(G4Track&, double z, double time, const G4TouchableHandle&, const G4TouchableHandle&,
                      G4StepStatus, G4Track* child=nullptr);
 };
@@ -122,11 +129,34 @@ std::unique_ptr<G4Track> ComponentRecorderCallbackFixture::makeTrack(
   return track;
 }
 
-void ComponentRecorderCallbackFixture::start(G4Track& track) {
+void ComponentRecorderCallbackFixture::start(G4Track& track, bool expectKilled) {
   const bool killed=cut_->stackingActionCut(&track);
-  check(!killed, "Recorder unexpectedly rejects a scripted classification");
+  check(killed==expectKilled, "Recorder returned an unexpected classification decision");
   observer_->classifiedTrack(&track,killed);
-  observer_->beginTrack(&track);
+  if (!killed) observer_->beginTrack(&track);
+}
+
+// Constructed surface-born children: owned inward, owned outward with a zero-length exit, exit at birth,
+// and children of the outside entry step with inside or outside starting volumes.
+void ComponentRecorderCallbackFixture::produceBoundary(unsigned number) {
+  const bool entryChild=number>=4;
+  const bool insideStart=number==1 || number==2 || number==4;
+  auto parent=makeTrack(1,0,-50.001,0.,1.,10.,outside_);
+  auto child=makeTrack(2,1,entryChild ? -50. : 50.,entryChild ? 1. : 3.,number==1 ? -1. : 1.,1.,
+                       insideStart ? inside_ : outside_);
+  start(*parent);
+  step(*parent,-50.,1.,outside_,inside_,fGeomBoundary,entryChild ? child.get() : nullptr);
+  step(*parent,0.,2.,inside_,inside_,fPostStepDoItProc);
+  step(*parent,50.,3.,inside_,outside_,fGeomBoundary,entryChild ? nullptr : child.get());
+  check(child->GetCurrentStepNumber()==0 && child->GetStep()==nullptr, "Child is not a zero-step object");
+  start(*child,number==3);
+  if (number==3) return;
+  if (number==2) {
+    step(*child,50.,3.,inside_,outside_,fGeomBoundary);
+    return;
+  }
+  child->SetTrackStatus(fStopAndKill);
+  observer_->endTrack(child.get());
 }
 
 G4ThreeVector ComponentRecorderCallbackFixture::step(
@@ -165,7 +195,7 @@ G4ThreeVector ComponentRecorderCallbackFixture::step(
 
 void ComponentRecorderCallbackFixture::produce(art::Event& event) {
   const unsigned number=event.id().event();
-  check(number==seen_+1 && number<=13, "Fixture requires consecutive event IDs 1 through 13");
+  check(number==seen_+1 && number<=cases(), "Fixture requires consecutive event IDs from 1");
   if (!seen_) { run_=event.id().run(); subrun_=event.id().subRun(); }
   check(event.id().run()==run_ && event.id().subRun()==subrun_, "Fixture must stay in one run/subrun");
   ++seen_;
@@ -173,6 +203,13 @@ void ComponentRecorderCallbackFixture::produce(art::Event& event) {
   SimParticleHelper helper(0u,inputs_,id,&event,event.productGetter(id));
   cut_->finishConstruction(CLHEP::Hep3Vector{});
   cut_->beginEvent(event,helper);
+  if (boundary_) {
+    produceBoundary(number);
+    cut_->put(event);
+    event.put(std::make_unique<SimParticleCollection>());
+    std::cout << "ComponentRecorderCallbackFixture completed constructed boundary-born case " << number << '\n';
+    return;
+  }
   const bool surface=number<=4;
   const bool outside=number==3 || number==4;
   const double direction=(number==1 || number==3) ? -1. : 1.;
@@ -185,7 +222,13 @@ void ComponentRecorderCallbackFixture::produce(art::Event& event) {
   if (surface) check(child->GetPosition()==endpoint, "Child is not at the parent's exact outward endpoint");
   check(child->GetCurrentStepNumber()==0 && child->GetStep()==nullptr, "Child is not a zero-step object");
   if (number==6) child->SetTrackStatus(fStopAndKill);
-  start(*child);
+  start(*child,outside);
+  if (outside) {
+    cut_->put(event);
+    event.put(std::make_unique<SimParticleCollection>());
+    std::cout << "ComponentRecorderCallbackFixture completed constructed-object case " << number << '\n';
+    return;
+  }
   if (number==11) observer_->classifiedTrack(child.get(),false);
   G4TrackStatus terminal=fStopAndKill;
   if (number==7) terminal=fKillTrackAndSecondaries;

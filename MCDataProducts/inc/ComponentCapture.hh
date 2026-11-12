@@ -60,5 +60,19 @@ namespace mu2e {
     std::vector<ComponentStep> steps;
   };
 
+  // Per-track ancestry link for a ComponentCapture; creatorStep indexes ComponentCapture::steps, -1 for the primary.
+  struct ComponentTrackLink {
+    std::int64_t track=0, parent=0, creatorStep=-1;
+    bool bornOnSurface=false, exitAtBirth=false;
+  };
+
+  // Companion of ComponentCapture with ancestry links and the physics/material/cut manifest; never bank admissible.
+  struct ComponentCaptureLinks {
+    int schema=1;
+    std::int64_t run=0, subrun=0, event=0;
+    std::string g4Version, manifest, manifestHash;
+    std::vector<ComponentTrackLink> tracks;
+  };
+
 }
 #endif

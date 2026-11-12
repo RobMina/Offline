@@ -247,6 +247,103 @@ int ConstructCaptureCRVModule::construct(VolumeInfo const& parent, SimpleConfig 
          << " sourceMin=" << low << " sourceMax=" << high << " sourceOrigin=" << origin
          << " envelopeHalf=" << Vec(half[0], half[1], half[2]) << " clearance=" << clearance
          << " fill=" << air->GetName() << G4endl;
+
+  // Optional unrecorded neighbour: its own envelope touches the capture envelope on one local face.
+  int const neighbourNumber = config.getInt("captureCRV.neighbourModule", -1);
+  if (neighbourNumber < 0) return 0;
+  if (!hideCMBs) throw cet::exception("GEOM") << "captureCRV.neighbourModule requires crs.hideCRVCMBs=true\n";
+  if (neighbourNumber == moduleNumber ||
+      static_cast<std::size_t>(neighbourNumber) >= shield->getCRSScintillatorModules().size())
+    throw cet::exception("GEOM") << "Invalid captureCRV.neighbourModule " << neighbourNumber << '\n';
+  std::string const face = config.getString("captureCRV.neighbourFace", "+x");
+  if (face.size() != 2 || (face[0] != '+' && face[0] != '-') || face[1] < 'x' || face[1] > 'z')
+    throw cet::exception("GEOM") << "captureCRV.neighbourFace must be one of +x -x +y -y +z -z\n";
+  unsigned const axis = face[1]-'x';
+  double const sign = face[0] == '+' ? 1. : -1.;
+  auto const& neighbour = shield->getModule(neighbourNumber);
+  auto const& nLayers = neighbour.getLayers();
+  if (nLayers.size() != layers.size() || neighbour.getAbsorberLayers().size() != module.getAbsorberLayers().size() ||
+      neighbour.getAluminumSheets().size() != 2)
+    throw cet::exception("GEOM") << "Neighbour module must have the capture module's layer structure\n";
+  Vec nLow, nHigh;
+  for (unsigned i = 0; i < 3; ++i) {
+    nLow[i] = std::numeric_limits<double>::infinity();
+    nHigh[i] = -nLow[i];
+  }
+  auto nBound = [&](auto const& item) {
+    auto const& p = item.getPosition();
+    auto const& h = item.getHalfLengths();
+    validateBox(p, h);
+    for (unsigned i = 0; i < 3; ++i) {
+      nLow[i] = std::min(nLow[i], p[i]-h[i]);
+      nHigh[i] = std::max(nHigh[i], p[i]+h[i]);
+    }
+  };
+  for (auto const& layer : nLayers) {
+    nBound(layer);
+    for (auto const& ptr : layer.getBars()) {
+      if (!ptr) throw cet::exception("GEOM") << "Null CRV bar\n";
+      contains(layer.getPosition(), layer.getHalfLengths(), ptr->getPosition(), ptr->getHalfLengths(), tolerance);
+    }
+  }
+  for (auto const& item : neighbour.getAbsorberLayers()) nBound(item);
+  for (auto const& item : neighbour.getAluminumSheets()) nBound(item);
+  for (auto const& item : neighbour.getFEBs()) nBound(item);
+  Vec const nOrigin = 0.5*nLow + 0.5*nHigh;
+  Half nHalf(3);
+  for (unsigned i = 0; i < 3; ++i) nHalf[i] = 0.5*nHigh[i]-0.5*nLow[i]+clearance;
+  validateBox(nOrigin, nHalf);
+  for (auto const& support : geometry->getSupportStructures()) {
+    auto const& p = support.getPosition();
+    auto const& h = support.getHalfLengths();
+    bool overlap = true;
+    for (unsigned i = 0; i < 3; ++i)
+      overlap = overlap && nOrigin[i]-nHalf[i] < p[i]+h[i] && p[i]-h[i] < nOrigin[i]+nHalf[i];
+    if (overlap) throw cet::exception("GEOM") << "NeighbourEnvelope intersects global shared support "
+                                            << support.getName() << "; ownership is undefined\n";
+  }
+  // In the source layout the two cleared envelopes overlap where every axis has a positive overlap length.
+  Vec sourceOverlap;
+  for (unsigned i = 0; i < 3; ++i)
+    sourceOverlap[i] = std::min(origin[i]+half[i], nOrigin[i]+nHalf[i])-std::max(origin[i]-half[i], nOrigin[i]-nHalf[i]);
+  Vec localOffset;
+  localOffset[axis] = sign*(half[axis]+nHalf[axis]);
+  Vec const nDisplacement = displacement + localToWorld*localOffset;
+  for (unsigned row = 0; row < 3; ++row) {
+    double extent = std::abs(nDisplacement[row]);
+    for (unsigned col = 0; col < 3; ++col) extent += std::abs(matrix[3*row+col])*nHalf[col];
+    if (!std::isfinite(extent) || extent+10.*tolerance >= std::min(worldHalf, parentHalf[row]))
+      throw cet::exception("GEOM") << "NeighbourEnvelope must fit strictly inside the vacuum study parent\n";
+  }
+  auto* nEnvelope = box("NeighbourEnvelope", nHalf, air);
+  place("NeighbourEnvelope", nEnvelope, nDisplacement, parent.logical, 3, inverse);
+  std::size_t nPlacedBars = 0;
+  for (auto const& layer : nLayers) {
+    auto const name = layer.name("CRSscintLayer_");
+    auto* layerLogical = box(name, layer.getHalfLengths(), air);
+    place(name, layerLogical, layer.getPosition()-nOrigin, nEnvelope, 0);
+    for (auto const& ptr : layer.getBars()) {
+      auto const& bar = *ptr;
+      place(bar.name("CRSScintillatorBar_"), barLogical, bar.getPosition()-layer.getPosition(), layerLogical, bar.index().asInt());
+      ++nPlacedBars;
+    }
+  }
+  auto placeNeighbourParts = [&](auto const& parts, std::string const& base, std::string const& material) {
+    auto* mat = findMaterialOrThrow(material);
+    for (std::size_t i = 0; i < parts.size(); ++i) {
+      auto const name = neighbour.name(base)+"_"+std::to_string(i);
+      place(name, box(name, parts[i].getHalfLengths(), mat), parts[i].getPosition()-nOrigin, nEnvelope, 0);
+    }
+  };
+  placeNeighbourParts(neighbour.getAbsorberLayers(), "CRSAbsorber_", shield->getAbsorberMaterialName());
+  placeNeighbourParts(neighbour.getAluminumSheets(), "CRSAluminumSheet_", shield->getAluminumSheetMaterialName());
+  placeNeighbourParts(neighbour.getFEBs(), "CRSFEB_", shield->getFEBMaterialName());
+  auto const precision = G4cout.precision();
+  G4cout << std::setprecision(17) << "CaptureCRV neighbour module=" << neighbourNumber << " face=" << face
+         << " bars=" << nPlacedBars << " CMBs=0 sourceOrigin=" << nOrigin
+         << " envelopeHalf=" << Vec(nHalf[0], nHalf[1], nHalf[2]) << " displacement=" << nDisplacement
+         << " sourceLayoutEnvelopeOverlap=" << sourceOverlap << G4endl;
+  G4cout.precision(precision);
   return 0;
 }
 }

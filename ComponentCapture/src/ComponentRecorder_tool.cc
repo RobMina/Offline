@@ -11,17 +11,29 @@
 #include "fhiclcpp/ParameterSet.h"
 #include "Geant4/G4Box.hh"
 #include "Geant4/G4DynamicParticle.hh"
+#include "Geant4/G4Element.hh"
+#include "Geant4/G4IonisParamMat.hh"
 #include "Geant4/G4RotationMatrix.hh"
 #include "Geant4/G4StepPoint.hh"
 #include "Geant4/G4VPhysicalVolume.hh"
 #include "Geant4/G4LogicalVolume.hh"
 #include "Geant4/G4Material.hh"
+#include "Geant4/G4MaterialCutsCouple.hh"
+#include "Geant4/G4ParticleDefinition.hh"
+#include "Geant4/G4ParticleTable.hh"
 #include "Geant4/G4PhysicalVolumeStore.hh"
+#include "Geant4/G4ProcessManager.hh"
+#include "Geant4/G4ProcessVector.hh"
+#include "Geant4/G4ProductionCuts.hh"
+#include "Geant4/G4ProductionCutsTable.hh"
 #include "Geant4/G4Step.hh"
 #include "Geant4/G4Track.hh"
 #include "Geant4/G4VProcess.hh"
 #include "Geant4/G4VTouchable.hh"
+#include "Geant4/G4Version.hh"
 #include <algorithm>
+#include <cstdio>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <set>
@@ -32,6 +44,15 @@ namespace mu2e {
     std::vector<double> matrix(const G4RotationMatrix& r) {
       return {r.xx(), r.xy(), r.xz(), r.yx(), r.yy(), r.yz(), r.zx(), r.zy(), r.zz()};
     }
+    // FNV-1a 64-bit of the canonical manifest text, as 16 lowercase hex digits.
+    std::string fnv1a(const std::string& text) {
+      std::uint64_t h=14695981039346656037ull;
+      for (const unsigned char c : text) { h^=c; h*=1099511628211ull; }
+      char out[17];
+      std::snprintf(out,sizeof out,"%016llx",static_cast<unsigned long long>(h));
+      return out;
+    }
+    constexpr int pilotSpecies[]={13,-13,11,-11,22,2112,2212,211,-211};
   }
 
   class ComponentRecorder : public IMu2eG4Cut, public IMu2eG4Observer {
@@ -45,12 +66,16 @@ namespace mu2e {
     }
     void declareProducts(art::ProducesCollector& pc, art::ConsumesCollector&) override {
       pc.produces<ComponentCapture>("componentCapture");
+      pc.produces<ComponentCaptureLinks>("componentCaptureLinks");
     }
     void finishConstruction(const CLHEP::Hep3Vector&) override;
     void beginEvent(const art::Event&, const SimParticleHelper&) override;
     void put(art::Event&) override;
-    void deleteCutsData() override { data_.reset(); tracks_.clear(); classified_.clear(); }
-    bool stackingActionCut(const G4Track*) override { return false; }
+    void deleteCutsData() override {
+      data_.reset(); links_.reset(); tracks_.clear(); classified_.clear();
+      pending_.clear(); creatorOf_.clear(); birthExits_.clear();
+    }
+    bool stackingActionCut(const G4Track*) override;
     bool steppingActionCut(const G4Step*) override;
     void classifiedTrack(const G4Track*, bool) override;
     void beginTrack(const G4Track*) override;
@@ -67,7 +92,16 @@ namespace mu2e {
     std::map<std::int64_t, std::size_t> tracks_;
     std::set<std::int64_t> classified_;
     std::unique_ptr<ComponentCapture> data_;
+    std::unique_ptr<ComponentCaptureLinks> links_;
+    // Unclassified secondaries keyed by engine pointer, mapped to the index of the step that created them.
+    std::map<const G4Track*, std::int64_t> pending_;
+    std::map<std::int64_t, std::int64_t> creatorOf_;
+    std::set<const G4Track*> birthExits_;
+    std::string manifest_, manifestHash_;
     bool inside(const G4VTouchable*) const;
+    bool onSurface(const ComponentState&) const;
+    void buildManifest();
+    void pushTrack(ComponentTrack&&, const ComponentTrackLink&);
     ComponentState state(const G4Track*) const;
     ComponentState state(const G4StepPoint*, double) const;
     void coordinates(ComponentState&, const G4ThreeVector&, const G4ThreeVector&) const;
@@ -133,6 +167,65 @@ namespace mu2e {
     return false;
   }
 
+  bool ComponentRecorder::onSurface(const ComponentState& s) const {
+    return envelope_->GetLogicalVolume()->GetSolid()->Inside(G4ThreeVector(s.lx,s.ly,s.lz))==kSurface;
+  }
+
+  void ComponentRecorder::buildManifest() {
+    std::ostringstream m;
+    m << std::setprecision(17) << "manifest|1\ng4|" << G4Version << "\nphysicsTag|" << physicsTag_ << '\n';
+    // Declared Geant4 behaviour, not a tuned value: muon-decay daughters total m_mu - m_e.
+    m << "declared|G4MuonDecayChannel|daughterTotalEnergy=m_mu-m_e\n";
+    std::set<std::string> names;
+    for (const auto& v : volumes_) names.insert(v.material);
+    for (const auto& name : names) {
+      const auto* mat=G4Material::GetMaterial(name,false);
+      m << "material|" << name;
+      if (mat) {
+        m << '|' << mat->GetDensity()/(CLHEP::g/CLHEP::cm3) << '|'
+          << mat->GetIonisation()->GetMeanExcitationEnergy()/CLHEP::eV << '|' << static_cast<int>(mat->GetState())
+          << '|' << mat->GetTemperature()/CLHEP::kelvin;
+        const auto* fractions=mat->GetFractionVector();
+        for (std::size_t i=0; i<mat->GetNumberOfElements(); ++i)
+          m << '|' << mat->GetElement(static_cast<G4int>(i))->GetName() << ':' << fractions[i];
+      } else m << "|missing";
+      m << '\n';
+    }
+    auto* cuts=G4ProductionCutsTable::GetProductionCutsTable();
+    for (std::size_t i=0; i<cuts->GetTableSize(); ++i) {
+      const auto* couple=cuts->GetMaterialCutsCouple(static_cast<G4int>(i));
+      if (!couple || !couple->IsUsed()) continue;
+      m << "cut|" << couple->GetMaterial()->GetName();
+      for (int k=0; k<4; ++k) m << '|' << couple->GetProductionCuts()->GetProductionCut(k)/CLHEP::mm;
+      for (int k=0; k<4; ++k) {
+        const auto* energies=cuts->GetEnergyCutsVector(k);
+        m << '|' << (energies && i<energies->size() ? (*energies)[i]/CLHEP::MeV : -1.);
+      }
+      m << '\n';
+    }
+    // Without a physics list the particle table must not be queried; record that instead.
+    auto* particles=G4ParticleTable::GetParticleTable();
+    for (const int pdg : pilotSpecies) {
+      m << "processes|" << pdg;
+      if (!particles->GetReadiness()) { m << "|unavailable\n"; continue; }
+      const auto* particle=particles->FindParticle(pdg);
+      const auto* manager=particle ? particle->GetProcessManager() : nullptr;
+      if (manager) {
+        const auto* list=manager->GetProcessList();
+        for (std::size_t i=0; i<list->size(); ++i) m << '|' << (*list)[i]->GetProcessName();
+      }
+      m << '\n';
+    }
+    manifest_=m.str(); manifestHash_=fnv1a(manifest_);
+  }
+
+  void ComponentRecorder::pushTrack(ComponentTrack&& r, const ComponentTrackLink& link) {
+    if (!tracks_.emplace(r.track,data_->tracks.size()).second)
+      throw cet::exception("ComponentCapture") << "Resumed/duplicate track is unsupported in schema 1";
+    data_->tracks.push_back(std::move(r));
+    links_->tracks.push_back(link);
+  }
+
   void ComponentRecorder::coordinates(ComponentState& s, const G4ThreeVector& p, const G4ThreeVector& m) const {
     const auto local=rotation_.inverse()*(p-translation_);
     const auto momentum=rotation_.inverse()*m;
@@ -183,6 +276,19 @@ namespace mu2e {
     data_->geometryTag=geometryTag_; data_->physicsTag=physicsTag_; data_->envelope=envelopeName_;
     data_->translation={translation_.x(),translation_.y(),translation_.z()};
     data_->rotation=matrix(rotation_); data_->halfSize=halfSize_; data_->volumes=volumes_;
+    links_=std::make_unique<ComponentCaptureLinks>();
+    links_->run=data_->run; links_->subrun=data_->subrun; links_->event=data_->event;
+    buildManifest();
+    links_->g4Version=G4Version; links_->manifest=manifest_; links_->manifestHash=manifestHash_;
+  }
+
+  // A child of an in-component interaction that the navigator places outside the envelope exits at birth.
+  bool ComponentRecorder::stackingActionCut(const G4Track* t) {
+    if (!data_ || t->GetParentID()==0) return false;
+    const auto it=pending_.find(t);
+    if (it==pending_.end() || !data_->steps.at(it->second).preInside || inside(t->GetTouchable())) return false;
+    birthExits_.insert(t);
+    return true;
   }
 
   void ComponentRecorder::classifiedTrack(const G4Track* t, bool killed) {
@@ -192,30 +298,52 @@ namespace mu2e {
     ComponentClassification c;
     c.track=t->GetTrackID(); c.parent=t->GetParentID(); c.pdg=t->GetDefinition()->GetPDGEncoding();
     c.status=static_cast<int>(t->GetTrackStatus()); c.killed=killed; c.state=state(t);
-    data_->classifications.push_back(std::move(c));
-    if (killed) error("classification_rejection");
+    const bool repeat=classified_.count(c.track)>0;
+    std::int64_t creator=-1;
+    if (c.parent && !repeat) {
+      const auto it=pending_.find(t);
+      if (it==pending_.end()) error("secondary_without_creator_step");
+      else { creator=it->second; pending_.erase(it); }
+    }
+    const bool birthExit=birthExits_.erase(t)>0;
+    data_->classifications.push_back(c);
+    if (killed && !birthExit) error("classification_rejection");
     if (t->GetTrackID()<=0) error("classification_without_final_id");
     if (!classified_.insert(t->GetTrackID()).second) error("reclassification_unsupported");
+    if (!repeat) creatorOf_.emplace(c.track,creator);
+    if (!birthExit) return;
+    if (!killed) error("exit_at_birth_not_killed");
+    if (data_->tracks.size()>=maxTracks_) throw cet::exception("ComponentCapture") << "Track capacity exceeded";
+    ComponentTrack r;
+    r.track=c.track; r.parent=c.parent; r.pdg=c.pdg; r.begin=c.state; r.end=c.state; r.creator=c.state.process;
+    r.ended=true; r.reason=4; r.status=static_cast<int>(fStopAndKill);
+    ComponentTrackLink link;
+    link.track=r.track; link.parent=r.parent; link.creatorStep=creator; link.exitAtBirth=true;
+    link.bornOnSurface=onSurface(r.begin);
+    pushTrack(std::move(r),link);
   }
 
   void ComponentRecorder::beginTrack(const G4Track* t) {
     if (!data_) throw cet::exception("ComponentCapture") << "Tracking outside an event";
     if (data_->tracks.size()>=maxTracks_) throw cet::exception("ComponentCapture") << "Track capacity exceeded";
-    if (!tracks_.emplace(t->GetTrackID(),data_->tracks.size()).second)
-      throw cet::exception("ComponentCapture") << "Resumed/duplicate track is unsupported in schema 1";
     ComponentTrack r;
     r.track=t->GetTrackID(); r.parent=t->GetParentID(); r.pdg=t->GetDefinition()->GetPDGEncoding(); r.begin=state(t);
     r.creator=r.begin.process;
     if (t->GetTrackID()<=0 || !classified_.count(t->GetTrackID())) error("track_without_classification");
     if (t->GetWeight()!=1.) error("biased_track_weight");
     if (inside(t->GetTouchable())) { r.entered=true; r.entrance=r.begin; }
+    ComponentTrackLink link;
+    link.track=r.track; link.parent=r.parent;
+    const auto it=creatorOf_.find(r.track);
+    if (it!=creatorOf_.end()) link.creatorStep=it->second;
     if (r.parent) {
+      // Ownership follows the creating step and the navigator's starting volume, never position alone.
+      const bool creatorInside=link.creatorStep>=0 && data_->steps.at(link.creatorStep).preInside;
       if (!r.entered) error("secondary_born_outside_envelope");
-      const G4ThreeVector local(r.begin.lx,r.begin.ly,r.begin.lz);
-      if (envelope_->GetLogicalVolume()->GetSolid()->Inside(local)==kSurface)
-        error("boundary_born_secondary_ownership_unresolved");
+      else if (!creatorInside) error("secondary_inside_from_outside_interaction");
+      link.bornOnSurface=onSurface(r.begin);
     } else if (r.entered) error("primary_must_start_in_vacuum_upstream");
-    data_->tracks.push_back(std::move(r));
+    pushTrack(std::move(r),link);
   }
 
   bool ComponentRecorder::steppingActionCut(const G4Step* step) {
@@ -252,6 +380,10 @@ namespace mu2e {
     }
     r.stopProcess=s.post.process;
     data_->steps.push_back(std::move(s));
+    const auto index=static_cast<std::int64_t>(data_->steps.size()-1);
+    if (const auto* children=step->GetSecondaryInCurrentStep())
+      for (const auto* child : *children)
+        if (!pending_.emplace(child,index).second) error("duplicate_secondary_pointer");
     return data_->steps.back().firstExit;
   }
 
@@ -265,7 +397,8 @@ namespace mu2e {
       const auto* info=dynamic_cast<const Mu2eG4UserTrackInformation*>(t->GetUserInformation());
       if (info && info->isForced()) { error("external_forced_stop"); r.reason=3; }
       if (t->GetTrackStatus()!=fStopAndKill) { error("nonterminal_or_kill_secondaries_status"); r.reason=3; }
-      if (t->GetStep() && t->GetTrackStatus()==fStopAndKill &&
+      // A track stopped by its own energy loss on a boundary-limited step is a natural stop, not a resource kill.
+      if (t->GetStep() && t->GetTrackStatus()==fStopAndKill && t->GetKineticEnergy()>0. &&
           Mu2eG4UserHelpers::isTrackKilledByFieldPropagator(t,0)) {
         error("transportation_resource_kill"); r.reason=3;
       }
@@ -289,9 +422,11 @@ namespace mu2e {
     for (const auto& r : data_->tracks)
       if (children[r.track]!=r.secondaries) error("secondary_census_mismatch");
     if (data_->tracks.size()!=data_->classifications.size()) error("classification_tracking_census_mismatch");
+    if (!pending_.empty()) error("unclassified_secondary");
     data_->complete=data_->errors.empty();
     event.put(std::move(data_),"componentCapture");
-    tracks_.clear(); classified_.clear();
+    event.put(std::move(links_),"componentCaptureLinks");
+    tracks_.clear(); classified_.clear(); pending_.clear(); creatorOf_.clear(); birthExits_.clear();
   }
 }
 DEFINE_ART_CLASS_TOOL(mu2e::ComponentRecorder)

@@ -1,0 +1,7 @@
+# Neighbour-partition fixture: recorder on R1 module 0, unrecorded module 1 touching on the +x face.
+#include "Offline/ComponentCapture/fcl/crv-r1.fcl"
+process_name: ComponentCaptureCRVR1Pair
+source.firstRun: 18
+services.SeedService.baseSeed: 315459
+services.GeometryService.inputFile: "Offline/ComponentCapture/geom/crv-r1-pair-v10.txt"
+physics.producers.g4run.Mu2eG4CommonCut.tool.geometryTag: "crv-v10-R1-module0-neighbour1-touching-plusx-v1"

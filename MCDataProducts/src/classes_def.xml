@@ -55,6 +55,10 @@
  <class name="std::vector<mu2e::ComponentStep>"/>
  <class name="std::vector<mu2e::ComponentVolume>"/>
  <class name="art::Wrapper<mu2e::ComponentCapture>"/>
+ <class name="mu2e::ComponentTrackLink"/>
+ <class name="std::vector<mu2e::ComponentTrackLink>"/>
+ <class name="mu2e::ComponentCaptureLinks"/>
+ <class name="art::Wrapper<mu2e::ComponentCaptureLinks>"/>
  <class name="mu2e::StatusG4"/>
  <class name="std::vector<mu2e::StatusG4>"/>
  <class name="art::Wrapper<mu2e::StatusG4>"/>
