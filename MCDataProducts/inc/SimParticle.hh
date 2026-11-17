@@ -299,7 +299,9 @@ namespace mu2e {
   };
   typedef cet::map_vector<mu2e::SimParticle> SimParticleCollection;
 
-  // Ptr<SimParticle> resolution (art::Wrapper finds this by ADL): skips art's per-call type-name comparison
+  // Ptr<SimParticle> resolution (art::Wrapper finds this by ADL): skips art's per-call type-name comparison.
+  // TEMPORARY: remove this overload (and the setPtr.h include) once canvas's art::setPtr for cet::map_vector
+  // compares type_info instead of demangled type names (canvas issue: CANVAS_ISSUE_LINK)
   inline void setPtr(SimParticleCollection const& coll, std::type_info const& toType, unsigned long key,
                      void const*& ptr) {
     if (toType == typeid(SimParticle)) {
