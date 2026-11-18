@@ -52,7 +52,7 @@ public:
   // reach ~410 us.
   static constexpr DQMAxis kNPulses{101, -0.5, 100.5};
   static constexpr DQMAxis kNPulses2{200, -0.5, 3999.5};
-  static constexpr DQMAxis kBarId{200, -0.5, CRVId::nBars - 0.5};
+  static constexpr DQMAxis kBarId{200, -0.5, CRVDQMRun1::kNBars - 0.5};
   static constexpr DQMAxis kSiPM = DQMAxis::Counts(0, 3);
   static constexpr DQMAxis kPulsePE{100, 0., 400.};
   static constexpr DQMAxis kTime{100, 0., 2000.};

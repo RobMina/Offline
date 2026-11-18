@@ -452,6 +452,19 @@ namespace mu2e {
     kkg_->st_ = std::make_unique<KKGeom::StoppingTarget>(outer,inner,front,back,foils,thicknesses);
   }
 
+  namespace {
+    // SurfaceId of a CRV sector: its name, or for a length segment named "<sector>s<k>" that sector with index k
+    SurfaceId crvSectorSurfaceId(std::string const& name) {
+      if(SurfaceIdEnum::findByName(name,false,false).id() != SurfaceIdDetail::unknown) return SurfaceId(name);
+      auto pos = name.find_last_of('s');
+      if(pos != std::string::npos && pos+1 < name.size() && name.find_first_not_of("0123456789",pos+1) == std::string::npos){
+        std::string parent = name.substr(0,pos);
+        if(SurfaceIdEnum::findByName(parent,false,false).id() != SurfaceIdDetail::unknown) return SurfaceId(parent,std::stoi(name.substr(pos+1)));
+      }
+      throw cet::exception("KinKalGeomMaker") << "no SurfaceId for CRV sector " << name << "\n";
+    }
+  }
+
   void KinKalGeomMaker::makeCRV() {
     GeomHandle<CosmicRayShield> CRS;
     GeomHandle<DetectorSystem> det;
@@ -539,6 +552,7 @@ namespace mu2e {
       // create the rectangle
       KKCRVSector sector;
       sector.sname_ = shield.getName();
+      sector.sid_ = crvSectorSurfaceId(sector.sname_);
       sector.sector_ = std::make_shared<KinKal::Rectangle>(wdir,udir,midpoint,uhw,vhw);
       sector.whw_ = whw;
       // each layer's bar spans across the bars, one per module, so the material of a crossing can follow the layer stagger
@@ -591,7 +605,7 @@ namespace mu2e {
     // fill map
     unsigned isect(0);
     for(auto const& sector : kkg_->crv_->sectors()){
-      kkg_->map_.emplace(std::make_pair(SurfaceId(sector.sname_),std::static_pointer_cast<Surface>(sector.sector_)));
+      kkg_->map_.emplace(std::make_pair(sector.sid_,std::static_pointer_cast<Surface>(sector.sector_)));
       isect++;
     }
   }

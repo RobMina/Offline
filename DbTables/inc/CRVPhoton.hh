@@ -1,7 +1,6 @@
 #ifndef DbTables_CRVPhoton_hh
 #define DbTables_CRVPhoton_hh
 
-#include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DbTables/inc/DbTable.hh"
 #include "cetlib_except/exception.h"
 #include <cstdint>
@@ -19,14 +18,14 @@ class CRVPhoton : public DbTable {
 
   class Row {
    public:
-    Row(std::uint16_t channel, float photonYieldDeviation) :
+    Row(std::uint32_t channel, float photonYieldDeviation) :
         _channel(channel),
         _photonYieldDeviation(photonYieldDeviation) {}
-    std::uint16_t channel() const { return _channel; }
+    std::uint32_t channel() const { return _channel; }
     float photonYieldDeviation() const { return _photonYieldDeviation; }
 
    private:
-    std::uint16_t _channel;
+    std::uint32_t _channel;
     float _photonYieldDeviation;
   };
 
@@ -35,7 +34,7 @@ class CRVPhoton : public DbTable {
   CRVPhoton() :
       DbTable(cxname, "crv.photon", "channel,photonYieldDeviation") {}
   const Row& rowAt(const std::size_t index) const { return _rows.at(index); }
-  const Row& row(std::uint16_t channel) const { return _rows.at(channel); }
+  const Row& row(std::uint32_t channel) const { return _rows.at(channel); }
   std::vector<Row> const& rows() const { return _rows; }
   std::size_t nrow() const override { return _rows.size(); };
   std::size_t size() const override {
@@ -44,9 +43,9 @@ class CRVPhoton : public DbTable {
   const std::string orderBy() const override { return std::string("channel"); }
 
   void addRow(const std::vector<std::string>& columns) override {
-    std::uint16_t channel = std::stoul(columns[0]);
+    std::uint32_t channel = std::stoul(columns[0]);
     // enforce order, so channel can be looked up by index
-    if (channel >= CRVId::nChannels || channel != _rows.size()) {
+    if (channel != _rows.size()) {
       throw cet::exception("CRVPHOTON_BAD_CHANNEL")
           << "CRVPhoton::addRow bad channel, saw " << columns[0] << ", expected "
           << _rows.size() << "\n";

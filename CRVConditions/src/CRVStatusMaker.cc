@@ -20,7 +20,7 @@ CRVStatus::ptr_t CRVStatusMaker::fromFcl() {
   CRVStatus::StatusMap smap;
 
   for (auto const& ss : fvec) {
-    uint16_t channel = get<0>(ss);
+    uint32_t channel = get<0>(ss);
     int stat = get<1>(ss);
     smap[channel] = stat;
     if (_config.verbose()) {

@@ -4,6 +4,7 @@
 //
 #ifndef KinKalGeom_CRV_hh
 #define KinKalGeom_CRV_hh
+#include "Offline/DataProducts/inc/SurfaceId.hh"
 #include "KinKal/Geometry/Rectangle.hh"
 #include "KinKal/General/Vectors.hh"
 #include <cmath>
@@ -21,6 +22,7 @@ namespace mu2e {
     };
     struct KKCRVSector {
       std::string sname_;
+      SurfaceId sid_; // the sector name, or for a length segment "<sector>s<k>" the sector with index k
       RecPtr sector_; // midplane, spanning every layer: adjacent sectors overlap where their staggered layers interleave
       double whw_;
       std::vector<KKCRVLayer> layers_;

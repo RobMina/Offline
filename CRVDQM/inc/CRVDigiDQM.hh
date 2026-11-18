@@ -54,7 +54,7 @@ public:
   static constexpr DQMAxis kFebChannel = DQMAxis::Counts(0, CRVDQMRun1::kNChanPerFEB - 1);
   static constexpr DQMAxis kRocChannelEdges{CRVDQMRun1::kNChanPerROC, 0., CRVDQMRun1::kNChanPerROC};
   static constexpr DQMAxis kFebChannelEdges{CRVDQMRun1::kNChanPerFEB, 0., CRVDQMRun1::kNChanPerFEB};
-  static constexpr DQMAxis kBarId{200, -0.5, CRVId::nBars - 0.5};
+  static constexpr DQMAxis kBarId{200, -0.5, CRVDQMRun1::kNBars - 0.5};
   static constexpr DQMAxis kSiPM = DQMAxis::Counts(0, 3);
   // The global FEB ID, online channel, FPGA-pair and offline channel axes are
   // sized by the configuration: CRVDQMRun1::globalFebAxis(c),

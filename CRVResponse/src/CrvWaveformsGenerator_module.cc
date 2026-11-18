@@ -199,7 +199,7 @@ namespace mu2e
       CRSScintillatorBarIndex barIndex = iter->GetScintillatorBarIndex();
 
       //get FEB from database
-      uint16_t offlineChannel = barIndex.asUint()*4 + SiPM;
+      uint32_t offlineChannel = barIndex.asUint()*4 + SiPM;
       CRVROC   onlineChannel  = crvChannelMap.online(offlineChannel);
       uint16_t FEB            = onlineChannel.FEB();
       uint16_t FEBchannel     = onlineChannel.FEBchannel();  //will be used for the NZS data below

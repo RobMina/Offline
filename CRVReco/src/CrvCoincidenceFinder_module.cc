@@ -69,6 +69,7 @@ namespace mu2e
       fhicl::Atom<bool>   ignoreSecondaryPulses{Name("ignoreSecondaryPulses"), Comment("ignore secondary pulses in a waveform.")};
       fhicl::Atom<bool>   addOppositeSidePulses{Name("addOppositeSidePulses"), Comment("add pulses that are not part of a coincidence at their own readout side to the coincidence cluster that contains the opposite end of the same counter")};
       fhicl::Atom<bool>   ignoreReflectedPulses{Name("ignoreReflectedPulses"), Comment("ignore secondary pulses that are likely reflected pulses of the primary pulse")};
+      fhicl::Sequence<int> moduleLayers{Name("moduleLayers"), Comment("numbers of layers of the modules used for coincidences; pulses of other modules are ignored"), std::vector<int>{4}};
     };
 
     typedef art::EDProducer::Table<Config> Parameters;
@@ -95,6 +96,7 @@ namespace mu2e
     bool                                    _ignoreSecondaryPulses;
     bool                                    _addOppositeSidePulses;
     bool                                    _ignoreReflectedPulses;
+    std::vector<int>                        _moduleLayers;
 
 
     int         _totalEvents;
@@ -170,8 +172,21 @@ namespace mu2e
     void filterHits(const std::vector<CrvHit> &hits, std::list<CrvHit> &hitsFiltered, unsigned int readoutSide);
     void findClusters(std::list<CrvHit> &hits, std::vector<std::vector<CrvHit> > &clusters, double clusterMaxTimeDifference,
                       bool combineOppositeSides=false, double timeDifferenceOppositeSides=0);
+    struct CompareHitPulses
+    {
+      bool operator()(const std::vector<CrvHit>::const_iterator &a, const std::vector<CrvHit>::const_iterator &b) const {return a->_crvRecoPulse < b->_crvRecoPulse;}
+    };
+    typedef std::set<std::vector<CrvHit>::const_iterator,CompareHitPulses> CoincidenceHitSet;
+
     void checkCoincidence(const std::vector<CrvHit> &hits, std::list<CrvHit> &coincidenceHits);
+    void checkLayerCombinations(std::vector<std::vector<CrvHit> > &hitsLayers, size_t nCombinationLayers, size_t firstLayer,
+                                std::vector<size_t> &layers, std::vector<std::vector<CrvHit>::iterator> &layerIterators,
+                                CoincidenceHitSet &coincidenceHitSet);
+    void checkHitCombinations(std::vector<std::vector<CrvHit> > &hitsLayers, const std::vector<size_t> &layers,
+                              std::vector<std::vector<CrvHit>::iterator> &layerIterators, CoincidenceHitSet &coincidenceHitSet);
     bool checkCombination(std::vector<CrvHit>::iterator layerIterators[], int n);
+    std::vector<std::vector<CrvHit>::iterator> _combination;  //work space of checkHitCombinations
+    std::vector<double>                        _slopes;       //work space of checkCombination
     void addOppositeSidePulses(const std::vector<CrvHit> &candidates, std::vector<std::vector<CrvHit> > &clusters,
                                double maxTimeDifference);
 
@@ -190,6 +205,7 @@ namespace mu2e
     _ignoreSecondaryPulses(conf().ignoreSecondaryPulses()),
     _addOppositeSidePulses(conf().addOppositeSidePulses()),
     _ignoreReflectedPulses(conf().ignoreReflectedPulses()),
+    _moduleLayers(conf().moduleLayers()),
     _totalEvents(0),
     _totalEventsCoincidence(0)
   {
@@ -257,6 +273,8 @@ namespace mu2e
       s.maxSlope                        = sectorConfigIter->maxSlope();
       s.maxSlopeDifference              = sectorConfigIter->maxSlopeDifference();
       s.coincidenceLayers               = sectorConfigIter->coincidenceLayers();
+      if(s.coincidenceLayers<2)
+        throw std::logic_error("CrvCoincidenceFinder: coincidenceLayers of sector "+sectorName+" is less than 2.");
       s.minClusterPEs                   = sectorConfigIter->minClusterPEs();
       s.initialClusterMaxDistance       = sectorConfigIter->initialClusterMaxDistance();
       s.finalClusterMaxDistance         = sectorConfigIter->finalClusterMaxDistance();
@@ -264,6 +282,15 @@ namespace mu2e
       _sectorMap[i]=s;
       sectorTypes[s.sectorType].push_back(s);
     }
+
+    bool usedModules=false;
+    for(const auto &sector : sectors)
+    for(const auto &module : sector.getCRSScintillatorModules())
+    {
+      if(std::find(_moduleLayers.begin(),_moduleLayers.end(),module.nLayers())!=_moduleLayers.end()) usedModules=true;
+    }
+    if(!usedModules)
+      throw std::logic_error("CrvCoincidenceFinder: no CRV module has a number of layers listed in moduleLayers.");
 
     for(const auto& [sectorType,sectorVector] : sectorTypes)
     {
@@ -316,8 +343,9 @@ namespace mu2e
       int sectorNumber, moduleNumber, layerNumber, barNumber;
       CrvHelper::GetCrvCounterInfo(CRS, crvBarIndex, sectorNumber, moduleNumber, layerNumber, barNumber);
 
-      //ignore pulses from modules that have a number of layers other than 4.
-      if(CRS->getCRSScintillatorShield(sectorNumber).getModule(moduleNumber).nLayers()!=CRVId::nLayers) continue;
+      //ignore pulses from modules whose number of layers is not listed in moduleLayers
+      int nModuleLayers=CRS->getCRSScintillatorShield(sectorNumber).getModule(moduleNumber).nLayers();
+      if(std::find(_moduleLayers.begin(),_moduleLayers.end(),nModuleLayers)==_moduleLayers.end()) continue;
 
       //sector properties
       std::map<int,sectorCoincidenceProperties>::const_iterator sIter = _sectorMap.find(sectorNumber);
@@ -783,7 +811,8 @@ namespace mu2e
   {
     if(hits.empty()) return;
 
-    std::vector<CrvHit> hitsLayers[CRVId::nLayers];  //separated by layers
+    size_t nLayers=std::max_element(hits.begin(),hits.end(),[](const CrvHit &a, const CrvHit &b){return a._layer < b._layer;})->_layer+1;
+    std::vector<std::vector<CrvHit> > hitsLayers(nLayers);  //separated by layers
     std::vector<CrvHit>::const_iterator iterHit;
     for(iterHit=hits.begin(); iterHit!=hits.end(); ++iterHit)
     {
@@ -799,8 +828,7 @@ namespace mu2e
     //we want to collect all hits belonging to coincidence groups,
     //but avoid collecting hits multiple times, if they belong to different coincidence groups.
     //can be done by placing the hit interator into a set.
-    auto setComp = [](const std::vector<CrvHit>::const_iterator &a, const std::vector<CrvHit>::const_iterator &b) {return a->_crvRecoPulse < b->_crvRecoPulse;};
-    std::set<std::vector<CrvHit>::const_iterator,decltype(setComp)> coincidenceHitSet(setComp);
+    CoincidenceHitSet coincidenceHitSet;
 
     int minCoincidenceLayers = std::min_element(hits.begin(),hits.end(),
                                [](const CrvHit &a, const CrvHit &b){return a._coincidenceLayers < b._coincidenceLayers;})->_coincidenceLayers;
@@ -812,7 +840,7 @@ namespace mu2e
       //this cluster has so many hits that it makes no sense anymore to search for individual coincidences.
       //we still need to check that the minimum number of layers were hit to skip the coincidence check.
       int nonEmptyLayers=0;
-      for(size_t iLayer=0; iLayer<CRVId::nLayers; ++iLayer)
+      for(size_t iLayer=0; iLayer<nLayers; ++iLayer)
       {
         if(!hitsLayers[iLayer].empty()) ++nonEmptyLayers;
       }
@@ -824,117 +852,64 @@ namespace mu2e
     }
 
     //***************************************************
-    //find coincidences using 2/4 coincidence requirement
-    if(minCoincidenceLayers==2)
+    //find coincidences of n layers for every n required by a hit of this cluster:
+    //a k out of N coincidence requirement is checked with all combinations of k out of the N layers
+    std::vector<size_t> layers;
+    std::vector<std::vector<CrvHit>::iterator> layerIterators;
+    for(int n=minCoincidenceLayers; n<=maxCoincidenceLayers; ++n)
     {
-      std::vector<CrvHit>::iterator layerIterators[2];
-
-      for(int layer1=0; layer1<4; ++layer1)
-      for(int layer2=layer1+1; layer2<4; ++layer2)
-      {
-        std::vector<CrvHit> &layer1Hits=hitsLayers[layer1];
-        std::vector<CrvHit> &layer2Hits=hitsLayers[layer2];
-        std::vector<CrvHit>::iterator layer1Iter;
-        std::vector<CrvHit>::iterator layer2Iter;
-
-        //it will loop only, if both layers have hits
-        //loops will exit, if all three hits require a 3/4 or 4/4 coincidence
-        for(layer1Iter=layer1Hits.begin(); layer1Iter!=layer1Hits.end(); ++layer1Iter)
-        for(layer2Iter=layer2Hits.begin(); layer2Iter!=layer2Hits.end(); ++layer2Iter)
-        {
-          if(layer1Iter->_coincidenceLayers>2 && layer2Iter->_coincidenceLayers>2) continue; //all hits require at least a 3/4 coincidence
-
-          //add all both hits into one array
-          layerIterators[0]=layer1Iter;
-          layerIterators[1]=layer2Iter;
-          if(checkCombination(layerIterators,2))
-          {
-            coincidenceHitSet.insert(layer1Iter);
-            coincidenceHitSet.insert(layer2Iter);
-          }
-        }
-      }
-    }  //two layer coincidences
-
-    //***************************************************
-    //find coincidences using 3/4 coincidence requirement
-    if(minCoincidenceLayers<=3 && maxCoincidenceLayers>=3)
-    {
-      std::vector<CrvHit>::iterator layerIterators[3];
-
-      for(int layer1=0; layer1<4; ++layer1)
-      for(int layer2=layer1+1; layer2<4; ++layer2)
-      for(int layer3=layer2+1; layer3<4; ++layer3)
-      {
-        std::vector<CrvHit> &layer1Hits=hitsLayers[layer1];
-        std::vector<CrvHit> &layer2Hits=hitsLayers[layer2];
-        std::vector<CrvHit> &layer3Hits=hitsLayers[layer3];
-        std::vector<CrvHit>::iterator layer1Iter;
-        std::vector<CrvHit>::iterator layer2Iter;
-        std::vector<CrvHit>::iterator layer3Iter;
-
-        //it will loop only, if all 3 layers have hits
-        //loops will exit, if all three hits require a 4/4 coincidence
-        for(layer1Iter=layer1Hits.begin(); layer1Iter!=layer1Hits.end(); ++layer1Iter)
-        for(layer2Iter=layer2Hits.begin(); layer2Iter!=layer2Hits.end(); ++layer2Iter)
-        for(layer3Iter=layer3Hits.begin(); layer3Iter!=layer3Hits.end(); ++layer3Iter)
-        {
-          if(layer1Iter->_coincidenceLayers>3 && layer2Iter->_coincidenceLayers>3 && layer3Iter->_coincidenceLayers>3) continue; //all hits require at 4/4 coincidence
-
-          //add all 3 hits into one array
-          layerIterators[0]=layer1Iter;
-          layerIterators[1]=layer2Iter;
-          layerIterators[2]=layer3Iter;
-          if(checkCombination(layerIterators,3))
-          {
-            coincidenceHitSet.insert(layer1Iter);
-            coincidenceHitSet.insert(layer2Iter);
-            coincidenceHitSet.insert(layer3Iter);
-          }
-        }
-      }
-    }  //three layer coincidences
-
-    //***************************************************
-    //find coincidences using 4/4 coincidence requirement
-    if(maxCoincidenceLayers==4)
-    {
-      std::vector<CrvHit>::iterator layerIterators[4];
-
-      std::vector<CrvHit> &layer0Hits=hitsLayers[0];
-      std::vector<CrvHit> &layer1Hits=hitsLayers[1];
-      std::vector<CrvHit> &layer2Hits=hitsLayers[2];
-      std::vector<CrvHit> &layer3Hits=hitsLayers[3];
-      std::vector<CrvHit>::iterator layer0Iter;
-      std::vector<CrvHit>::iterator layer1Iter;
-      std::vector<CrvHit>::iterator layer2Iter;
-      std::vector<CrvHit>::iterator layer3Iter;
-
-      //it will loop only, if all 4 layers have hits
-      for(layer0Iter=layer0Hits.begin(); layer0Iter!=layer0Hits.end(); ++layer0Iter)
-      for(layer1Iter=layer1Hits.begin(); layer1Iter!=layer1Hits.end(); ++layer1Iter)
-      for(layer2Iter=layer2Hits.begin(); layer2Iter!=layer2Hits.end(); ++layer2Iter)
-      for(layer3Iter=layer3Hits.begin(); layer3Iter!=layer3Hits.end(); ++layer3Iter)
-      {
-        //add all 4 hits into one array
-        layerIterators[0]=layer0Iter;
-        layerIterators[1]=layer1Iter;
-        layerIterators[2]=layer2Iter;
-        layerIterators[3]=layer3Iter;
-        if(checkCombination(layerIterators,4))
-        {
-          coincidenceHitSet.insert(layer0Iter);
-          coincidenceHitSet.insert(layer1Iter);
-          coincidenceHitSet.insert(layer2Iter);
-          coincidenceHitSet.insert(layer3Iter);
-        }
-      }
-    } // four layer coincidences
+      checkLayerCombinations(hitsLayers, n, 0, layers, layerIterators, coincidenceHitSet);
+    }
 
     //move the set of coincidence hit iterators to a list of hits
     for(auto iterHit=coincidenceHitSet.begin(); iterHit!=coincidenceHitSet.end(); ++iterHit) coincidenceHits.push_back(**iterHit);
 
   } //end check coincidence
+
+  void CrvCoincidenceFinder::checkLayerCombinations(std::vector<std::vector<CrvHit> > &hitsLayers, size_t nCombinationLayers, size_t firstLayer,
+                                                    std::vector<size_t> &layers, std::vector<std::vector<CrvHit>::iterator> &layerIterators,
+                                                    CoincidenceHitSet &coincidenceHitSet)
+  {
+    //all combinations of nCombinationLayers layers in increasing layer order
+    if(layers.size()==nCombinationLayers)
+    {
+      checkHitCombinations(hitsLayers, layers, layerIterators, coincidenceHitSet);
+      return;
+    }
+    for(size_t layer=firstLayer; layer<hitsLayers.size(); ++layer)
+    {
+      layers.push_back(layer);
+      checkLayerCombinations(hitsLayers, nCombinationLayers, layer+1, layers, layerIterators, coincidenceHitSet);
+      layers.pop_back();
+    }
+  }
+
+  void CrvCoincidenceFinder::checkHitCombinations(std::vector<std::vector<CrvHit> > &hitsLayers, const std::vector<size_t> &layers,
+                                                  std::vector<std::vector<CrvHit>::iterator> &layerIterators, CoincidenceHitSet &coincidenceHitSet)
+  {
+    //all combinations of one hit from each of the selected layers (loops only, if all selected layers have hits)
+    size_t n=layers.size();
+    if(layerIterators.size()==n)
+    {
+      //skip combinations, if all hits require coincidences of more than n layers
+      if(std::all_of(layerIterators.begin(),layerIterators.end(),
+                     [n](const std::vector<CrvHit>::iterator &a){return a->_coincidenceLayers>static_cast<int>(n);})) return;
+
+      _combination=layerIterators;  //checkCombination reorders its argument
+      if(checkCombination(_combination.data(),static_cast<int>(n)))
+      {
+        for(const auto &layerIter : layerIterators) coincidenceHitSet.insert(layerIter);
+      }
+      return;
+    }
+    std::vector<CrvHit> &layerHits=hitsLayers[layers[layerIterators.size()]];
+    for(auto layerIter=layerHits.begin(); layerIter!=layerHits.end(); ++layerIter)
+    {
+      layerIterators.push_back(layerIter);
+      checkHitCombinations(hitsLayers, layers, layerIterators, coincidenceHitSet);
+      layerIterators.pop_back();
+    }
+  }
 
   bool CrvCoincidenceFinder::checkCombination(std::vector<CrvHit>::iterator layerIterators[], int n)
   {
@@ -954,7 +929,8 @@ namespace mu2e
                       [](L &a, L &b){return a->_maxSlope < b->_maxSlope;}))->_maxSlope;
     double maxSlopeDifference = (*std::max_element(layerIterators,layerIterators+n,
                                 [](L &a, L &b){return a->_maxSlopeDifference < b->_maxSlopeDifference;}))->_maxSlopeDifference;
-    std::array<double,CRVId::nLayers-1> slopes;
+    std::vector<double> &slopes=_slopes;
+    slopes.resize(n-1);
     for(int d=0; d<n-1; ++d)
     {
       //slope = width direction / thickness direction
@@ -962,14 +938,11 @@ namespace mu2e
       if(slopes[d]<minSlope || slopes[d]>maxSlope) return false; //slopes need to be within minSlope and maxSlope
     }
 
-    if(n>2)
+    //all pairs of slopes need to be within maxSlopeDifference
+    for(int d1=0; d1<n-2; ++d1)
+    for(int d2=d1+1; d2<n-1; ++d2)
     {
-      if(fabs(slopes[0]-slopes[1])>maxSlopeDifference) return false;
-      if(n>3)
-      {
-        if(fabs(slopes[0]-slopes[2])>maxSlopeDifference) return false;
-        if(fabs(slopes[1]-slopes[2])>maxSlopeDifference) return false;
-      }
+      if(fabs(slopes[d1]-slopes[d2])>maxSlopeDifference) return false;
     }
 
     //need distances between subsequent positions, when ordered by position

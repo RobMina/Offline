@@ -25,7 +25,7 @@ class CRVPhotonYield : virtual public ProditionsEntity {
   CRVPhotonYield(PhotonYieldVec const& svec) : ProditionsEntity(cxname), _svec(svec) {}
 
   // photon yield deviation (from nominal value) for a channel
-  float photonYieldDeviation(std::uint16_t channel) const {
+  float photonYieldDeviation(std::uint32_t channel) const {
     if (channel >= _svec.size()) {
       throw cet::exception("CRVPHOTONYIELD_BAD_SCINTILLATOR BAR INDEX")
           << "CRVPhotonYield::photonYieldDeviation bad channel requested: "

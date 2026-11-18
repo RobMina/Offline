@@ -7,6 +7,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <array>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
@@ -27,16 +28,7 @@ CRVOrdinal::ptr_t CRVOrdinalMaker::fromFcl() {
       GeomHandle<CosmicRayShield>()->getAllCRSScintillatorBars().size() *
       CRVId::nChanPerBar;
 
-  // both maps initialized to invalid
-  // both are sparse, so this is used to catch invalid access
-  CRVOrdinal::OfflineMap offMap;
-  for (size_t i = 0; i <= CRVId::nROC; i++) {             //ROC numbers start at 1
-    for (size_t j = 0; j <= CRVId::nFEBPerROC; j++) {     //FEB numbers start at 1
-      for (size_t k = 0; k < CRVId::nChanPerFEB; k++) {
-        offMap[i][j][k] = CRVId::nChannels;
-      }
-    }
-  }
+  // online map initialized to invalid; it is sparse, so this is used to catch invalid access
   CRVOrdinal::OnlineMap onMap(nChan, CRVROC(0, 0, CRVId::nChanPerFEB));
 
   // load the online-to-offline numbering
@@ -63,6 +55,8 @@ CRVOrdinal::ptr_t CRVOrdinalMaker::fromFcl() {
   std::getline(ordFile, line);
 
   size_t nRead = 0, maxChan = 0;
+  size_t maxROC = CRVId::nROC, maxFEB = CRVId::nFEBPerROC;
+  std::vector<std::pair<std::uint32_t, CRVROC>> entries;
   std::vector<std::string> words;
   while (std::getline(ordFile, line)) {
     boost::split(words, line, boost::is_any_of(" \t"),
@@ -71,14 +65,25 @@ CRVOrdinal::ptr_t CRVOrdinalMaker::fromFcl() {
       throw cet::exception("CRVORDINAL_BAD_FILE")
           << " failed to read line " << line << "\n";
     }
-    std::uint16_t channel = std::stoul(words[0]);
+    std::uint32_t channel = std::stoul(words[0]);
     std::uint16_t ROC = std::stoul(words[1]);
     std::uint16_t FEB = std::stoul(words[2]);
     std::uint16_t FEBchannel = std::stoul(words[3]);
     onMap.at(channel) = CRVROC(ROC, FEB, FEBchannel);
-    offMap.at(ROC).at(FEB).at(FEBchannel) = channel;
+    entries.emplace_back(channel, CRVROC(ROC, FEB, FEBchannel));
     nRead++;
     if (channel > maxChan) maxChan = channel;
+    if (ROC > maxROC) maxROC = ROC;
+    if (FEB > maxFEB) maxFEB = FEB;
+  }
+
+  // offline map sized by the ROC and FEB numbers in the file (at least nROC x nFEBPerROC);
+  // it is sparse, so entries start at the invalid value nChan
+  std::array<std::uint32_t, CRVId::nChanPerFEB> invalidFEB;
+  invalidFEB.fill(nChan);
+  CRVOrdinal::OfflineMap offMap(maxROC + 1, std::vector<std::array<std::uint32_t, CRVId::nChanPerFEB>>(maxFEB + 1, invalidFEB));
+  for (auto const& [channel, roc] : entries) {
+    offMap.at(roc.ROC()).at(roc.FEB()).at(roc.FEBchannel()) = channel;
   }
 
   if (_config.verbose()) {

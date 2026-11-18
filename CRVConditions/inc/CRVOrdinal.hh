@@ -23,17 +23,16 @@ class CRVOrdinal : virtual public ProditionsEntity {
 
   // online numbers for each offline number
   typedef std::vector<CRVROC> OnlineMap;
-  // this is a 3-dim array: offline number = x[ROC][FEB][FEBchan]
-  typedef std::array<std::array<std::array<std::uint16_t, CRVId::nChanPerFEB>,
-                                CRVId::nFEBPerROC+1>,   //FEB numbers start at 1
-                                CRVId::nROC+1>          //ROC numbers start at 1
+  // offline number = x[ROC][FEB][FEBchan]; ROC and FEB numbers start at 1
+  // entries >= the number of offline channels mark channels that do not exist
+  typedef std::vector<std::vector<std::array<std::uint32_t, CRVId::nChanPerFEB>>>
                                 OfflineMap;
 
   CRVOrdinal(OnlineMap const& onMap, OfflineMap const& offMap) :
       ProditionsEntity(cxname), _onMap(onMap), _offMap(offMap) {}
 
   // check, if a channel exists
-  bool onlineExists(std::uint16_t channel) const {
+  bool onlineExists(std::uint32_t channel) const {
     if (channel >= _onMap.size()) return false;
     if (_onMap.at(channel).FEBchannel() >= CRVId::nChanPerFEB) return false;
     return true;
@@ -44,13 +43,13 @@ class CRVOrdinal : virtual public ProditionsEntity {
     if(channel.ROC()>=_offMap.size()) return false;
     if(channel.FEB()>=_offMap.at(channel.ROC()).size()) return false;
     if(channel.FEBchannel()>=_offMap.at(channel.ROC()).at(channel.FEB()).size()) return false;
-    std::uint16_t offlineChannel = _offMap.at(channel.ROC()).at(channel.FEB()).at(channel.FEBchannel());
-    if (offlineChannel >= CRVId::nChannels) return false;
+    std::uint32_t offlineChannel = _offMap.at(channel.ROC()).at(channel.FEB()).at(channel.FEBchannel());
+    if (offlineChannel >= _onMap.size()) return false;
     return true;
   }
 
   // online numbering triplet for an offline channel number
-  const CRVROC& online(std::uint16_t channel) const {
+  const CRVROC& online(std::uint32_t channel) const {
     if (_onMap.at(channel).FEBchannel() >= CRVId::nChanPerFEB) {
       throw cet::exception("CRVORDINAL_BAD_OFFLINE_CHANNEL")
           << "CRVOrdinal::online bad channel requested: "
@@ -60,10 +59,10 @@ class CRVOrdinal : virtual public ProditionsEntity {
   }
 
   // offline channel number for online numbering triplet
-  const std::uint16_t offline(const CRVROC& online) const {
-    std::uint16_t offline =
+  std::uint32_t offline(const CRVROC& online) const {
+    std::uint32_t offline =
         _offMap.at(online.ROC()).at(online.FEB()).at(online.FEBchannel());
-    if (offline >= CRVId::nChannels) {
+    if (offline >= _onMap.size()) {
       throw cet::exception("CRVORDINAL_BAD_ONLINE_CHANNEL")
           << "CRVOrdinal::offline bad channel requested: "
           << " ROC=" << online.ROC() << " FEB=" << online.FEB()

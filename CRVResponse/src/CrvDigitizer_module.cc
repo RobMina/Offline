@@ -94,7 +94,7 @@ namespace mu2e
         const CRSScintillatorBarIndex &barIndex = crvDigiMC.GetScintillatorBarIndex();
         const int SiPM = crvDigiMC.GetSiPMNumber();
 
-        uint16_t offlineChannel = barIndex.asUint()*CRVId::nChanPerBar + SiPM;
+        uint32_t offlineChannel = barIndex.asUint()*CRVId::nChanPerBar + SiPM;
         CRVROC   onlineChannel  = channelMap.online(offlineChannel);
         uint8_t  roc            = onlineChannel.ROC();
         uint8_t  feb            = onlineChannel.FEB();

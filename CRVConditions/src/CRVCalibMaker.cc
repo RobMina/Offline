@@ -72,7 +72,7 @@ CRVCalib::ptr_t CRVCalibMaker::fromDb(CRVSiPM::cptr_t sip_p,
                                       row.pulseArea(), timeOffset);
     if (_config.verbose()) {
       if (_config.verbose() > 1 || row.channel() < 5 ||
-          CRVId::nChannels - row.channel() <= 5) {
+          nChan - row.channel() <= 5) {
         cout << setw(10) << row.channel() << fixed << setprecision(3)
              << setw(10) << row.pedestal() << setprecision(3) << setw(10)
              << row.pulseHeight() << setprecision(3) << setw(10)

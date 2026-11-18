@@ -18,13 +18,13 @@ class CRVBadChan : public DbTable {
 
   class Row {
    public:
-    Row(std::uint16_t channel, int status) :
+    Row(std::uint32_t channel, int status) :
         _channel(channel), _status(status) {}
-    std::uint16_t channel() const { return _channel; }
+    std::uint32_t channel() const { return _channel; }
     int status() const { return _status; }
 
    private:
-    std::uint16_t _channel;
+    std::uint32_t _channel;
     int _status;
   };
 

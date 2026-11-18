@@ -3,7 +3,6 @@
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/KinKalGeom/inc/KinKalGeom.hh"
 #include "Offline/RecoDataProducts/inc/CrvCoincidenceCluster.hh"
-#include "messagefacility/MessageLogger/MessageLogger.h"
 #include <map>
 
 namespace mu2e {
@@ -30,8 +29,7 @@ namespace mu2e {
       g.w = sec.sector_->normal();
       g.uHalf = sec.sector_->uHalfLength();
       g.vHalf = sec.sector_->vHalfLength();
-      try { g.sid = SurfaceId(sec.sname_); }
-      catch(std::exception const&) { mf::LogWarning("TrkCrvGeom") << "no SurfaceId for CRV sector " << sec.sname_; }
+      g.sid = sec.sid_;
     }
     return sectors;
   }

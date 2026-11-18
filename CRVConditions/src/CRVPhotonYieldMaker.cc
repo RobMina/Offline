@@ -1,5 +1,6 @@
 #include "Offline/CRVConditions/inc/CRVPhotonYieldMaker.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CosmicRayShield.hh"
+#include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/GeometryService/inc/GeomHandle.hh"
 #include "Offline/GeometryService/inc/GeometryService.hh"
 #include "cetlib_except/exception.h"
@@ -56,7 +57,7 @@ CRVPhotonYield::ptr_t CRVPhotonYieldMaker::fromDb(CRVPhoton::cptr_t sci_p) {
     svec[row.channel()] = row.photonYieldDeviation();
     if (_config.verbose()) {
       if (_config.verbose() > 1 || row.channel() < 5 ||
-          CRVId::nChannels - row.channel() <= 5) {
+          nChan - row.channel() <= 5) {
         cout << setw(10) << row.channel() << fixed << setprecision(3)
              << setw(10) << row.photonYieldDeviation() << "\n";
       }

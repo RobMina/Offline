@@ -1,7 +1,6 @@
 #ifndef DbTables_CRVSiPM_hh
 #define DbTables_CRVSiPM_hh
 
-#include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/DbTables/inc/DbTable.hh"
 #include "cetlib_except/exception.h"
 #include <cstdint>
@@ -19,17 +18,17 @@ class CRVSiPM : public DbTable {
 
   class Row {
    public:
-    Row(std::uint16_t channel, float pedestal, float pulseHeight,
+    Row(std::uint32_t channel, float pedestal, float pulseHeight,
         float pulseArea) :
         _channel(channel),
         _pedestal(pedestal), _pulseHeight(pulseHeight), _pulseArea(pulseArea) {}
-    std::uint16_t channel() const { return _channel; }
+    std::uint32_t channel() const { return _channel; }
     float pedestal() const { return _pedestal; }
     float pulseHeight() const { return _pulseHeight; }
     float pulseArea() const { return _pulseArea; }
 
    private:
-    std::uint16_t _channel;
+    std::uint32_t _channel;
     float _pedestal;
     float _pulseHeight;
     float _pulseArea;
@@ -40,7 +39,7 @@ class CRVSiPM : public DbTable {
   CRVSiPM() :
       DbTable(cxname, "crv.sipm", "channel,pedestal,pulseheight,pulsearea") {}
   const Row& rowAt(const std::size_t index) const { return _rows.at(index); }
-  const Row& row(std::uint16_t channel) const { return _rows.at(channel); }
+  const Row& row(std::uint32_t channel) const { return _rows.at(channel); }
   std::vector<Row> const& rows() const { return _rows; }
   std::size_t nrow() const override { return _rows.size(); };
   std::size_t size() const override {
@@ -49,9 +48,9 @@ class CRVSiPM : public DbTable {
   const std::string orderBy() const override { return std::string("channel"); }
 
   void addRow(const std::vector<std::string>& columns) override {
-    std::uint16_t channel = std::stoul(columns[0]);
+    std::uint32_t channel = std::stoul(columns[0]);
     // enforce order, so channels can be looked up by index
-    if (channel >= CRVId::nChannels || channel != _rows.size()) {
+    if (channel != _rows.size()) {
       throw cet::exception("CRVSIPM_BAD_CHANNEL")
           << "CRVSiPM::addRow bad channel, saw " << columns[0] << ", expected "
           << _rows.size() << "\n";

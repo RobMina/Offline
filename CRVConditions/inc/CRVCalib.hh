@@ -23,19 +23,19 @@ class CRVCalib : virtual public ProditionsEntity {
 
   CRVCalib(const CalibVec& cvec) : ProditionsEntity(cxname), _cvec(cvec) {}
 
-  const CRVCalibPar& calib(std::uint16_t channel) const {
+  const CRVCalibPar& calib(std::uint32_t channel) const {
     return _cvec.at(channel);
   }
-  float pedestal(std::uint16_t channel) const {
+  float pedestal(std::uint32_t channel) const {
     return _cvec.at(channel).pedestal();
   }
-  float pulseHeight(std::uint16_t channel) const {
+  float pulseHeight(std::uint32_t channel) const {
     return _cvec.at(channel).pulseHeight();
   }
-  float pulseArea(std::uint16_t channel) const {
+  float pulseArea(std::uint32_t channel) const {
     return _cvec.at(channel).pulseArea();
   }
-  float timeOffset(std::uint16_t channel) const {
+  float timeOffset(std::uint32_t channel) const {
     return _cvec.at(channel).timeOffset();
   }
 

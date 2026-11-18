@@ -256,7 +256,7 @@ namespace mu2e {
         for(auto const& sector : kkg_h->CRV()->sectors()){
           SweepTarget tg;
           tg.effect_ = SweepTarget::crvsector;
-          tg.sid_ = SurfaceId(sector.sname_);
+          tg.sid_ = sector.sid_;
           tg.surf_ = sector.sector_.get();
           tg.rect_ = sector.sector_;
           tg.mat_ = &*kkmat_h->CRVMaterial();

@@ -27,7 +27,6 @@
 #include "Offline/GeometryService/inc/CosmicRayShieldMaker.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CosmicRayShield.hh"
 
-#include "Offline/DataProducts/inc/CRVId.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CRSScintillatorShield.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CRSScintillatorModule.hh"
 #include "Offline/CosmicRayShieldGeom/inc/CRSScintillatorLayer.hh"
@@ -378,14 +377,6 @@ namespace mu2e
               _firstCounter[isector], layerOffsets, VTNCSmallGap, VTNCLargeGap, VTNCBetweenModules,
               localToWorld, _nModules[isector], _nCountersPerModule[isector]);
     }
-
-    if(_crs->getAllCRSScintillatorBars().size() > CRVId::nBars) {
-      throw cet::exception("CRV_GEOM_COUNT")
-        << " More CRV bars created in geometry than static arrays can handle, "
-        << CRVId::nBars << " max "
-        << _crs->getAllCRSScintillatorBars().size() << " created\n";
-    }
-
   }
 
   void CosmicRayShieldMaker::makeCRVSupportStructures()
