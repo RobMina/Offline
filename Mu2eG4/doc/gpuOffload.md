@@ -41,4 +41,6 @@ gives `eIoni` (e- from e+-), `eBrem` (photon from e+-), `mu2eGpuPhotonSecondary`
 ## Tests
 
 - `Mu2eG4/fcl/g4test_gpuOffload.fcl` and `g4test_gpuOffloadMT.fcl`: the test engine on the DS vacuum volumes.
+- `Mu2eG4/fcl/g4test_gpuOffloadCPU.fcl`: region DS3Vacuum only, so the CPU path, the offload and the hand-over
+  kill (physical-volume names, e.g. `TargetFoil_00`, not logical-volume names) all run.
 - Feature off: `g4test_03.fcl` must give output identical to the base commit.

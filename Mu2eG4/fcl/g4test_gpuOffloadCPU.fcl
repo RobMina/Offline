@@ -1,0 +1,16 @@
+#
+# g4test_gpuOffload.fcl with the offload region DS3Vacuum only: the conversion electrons born in the stopping-target
+# foils (DS2Vacuum subtree) take the tracking manager's CPU path, e+-/gamma born in DS3Vacuum or below are offloaded,
+# and e+-/gamma born in foils TargetFoil_00-09 below 10 MeV are killed at hand-over. A test of the three paths, not a
+# physics setting.
+#
+#include "Offline/Mu2eG4/fcl/g4test_gpuOffload.fcl"
+
+services.TFileService.fileName : "g4test_gpuOffloadCPU.root"
+outputs.outfile.fileName : "data_gpuOffloadCPU.art"
+
+physics.producers.g4run.physics.gpuOffload.regionVolumes : [ "DS3Vacuum" ]
+physics.producers.g4run.physics.gpuOffload.handOverKill : [ { pdgIds : [ 11, -11, 22 ] maxKineticEnergy : 10.0
+    volumes : [ "TargetFoil_00", "TargetFoil_01", "TargetFoil_02", "TargetFoil_03", "TargetFoil_04",
+                "TargetFoil_05", "TargetFoil_06", "TargetFoil_07", "TargetFoil_08", "TargetFoil_09" ] } ]
+physics.producers.g4run.physics.gpuOffload.verbose : 2
