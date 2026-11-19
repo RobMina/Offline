@@ -28,6 +28,8 @@
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "cetlib_except/exception.h"
 #include "art/Framework/Services/Registry/ServiceDefinitionMacros.h"
+#include "art/Utilities/make_tool.h"
+#include "Offline/Mu2eG4/inc/IMu2eG4FastSimModel.hh"
 
 // Mu2e includes
 #include "Offline/ConfigTools/inc/checkForStale.hh"
@@ -136,6 +138,7 @@
 #include "Geant4/G4GDMLParser.hh"
 #include "Geant4/G4ProductionCuts.hh"
 #include "Geant4/G4Region.hh"
+#include "Geant4/G4RegionStore.hh"
 
 #include "Offline/Mu2eG4/inc/Mu2eG4GlobalMagneticField.hh"
 
@@ -186,6 +189,7 @@ namespace mu2e {
     sdHelper_->instantiateLVSDs(_config);
     instantiateSensitiveDetectors();
     constructBFieldAndManagers();
+    constructFastSimModels();
 
     // Local magnet fields, under the same conditions as their volumes in constructWorld()
     constructExtMonFNALMagnetFields(_config);
@@ -332,6 +336,8 @@ namespace mu2e {
       trackerInfo.logical->SetRegion(region);
       region->AddRootLogicalVolume(trackerInfo.logical);
     }
+
+    constructFastSimRegions();
 
     constructStepLimiters();
 
@@ -628,6 +634,59 @@ namespace mu2e {
   //    volumes of interest.
   // The net result is specifying a step limiter for pairs of (logical volume, particle species).
   //
+  // One envelope region per physics.fastSim model; shared by all threads
+  void Mu2eWorld::constructFastSimRegions(){
+
+    Mu2eG4Config::FastSim fastSim;
+    if ( !conf_.physics().fastSim(fastSim) ) return;
+
+    for ( const auto& model : fastSim.models() ) {
+      const std::string name = model.name();
+      if ( G4RegionStore::GetInstance()->GetRegion(name, false) != nullptr ) {
+        throw cet::exception("CONFIG") << "physics.fastSim: a G4Region named " << name << " exists already\n";
+      }
+      const auto envelopes = model.envelopes();
+      if ( envelopes.empty() ) {
+        throw cet::exception("CONFIG") << "physics.fastSim: model " << name << " has no envelope volumes\n";
+      }
+      G4Region* region = new G4Region(name); // G4RegionStore takes ownership
+      for ( const auto& volName : envelopes ) {
+        G4LogicalVolume* logical = _helper->locateVolInfo(volName).logical;
+        if ( logical->IsRootRegion() ) {
+          throw cet::exception("CONFIG") << "physics.fastSim: volume " << volName
+                                         << " is already the root of region " << logical->GetRegion()->GetName() << "\n";
+        }
+        logical->SetRegion(region);
+        region->AddRootLogicalVolume(logical);
+      }
+      if ( _verbosityLevel > 0 ) {
+        G4cout << __func__ << " fast-simulation region " << name << " with " << envelopes.size()
+               << " envelope volume(s)" << G4endl;
+      }
+    }
+  }
+
+  // This thread's fast-simulation models, built once per thread from their art tools
+  void Mu2eWorld::constructFastSimModels(){
+
+    Mu2eG4Config::FastSim fastSim;
+    if ( !conf_.physics().fastSim(fastSim) ) return;
+
+    // never deleted: at thread exit Geant4's allocators, which the models' navigators and touchables use, are gone
+    static thread_local std::vector<IMu2eG4FastSimModel*> tools;
+    if ( !tools.empty() ) return;
+
+    for ( const auto& model : fastSim.models() ) {
+      G4Region* region = G4RegionStore::GetInstance()->GetRegion(model.name(), false);
+      if ( region == nullptr ) {
+        throw cet::exception("CONFIG") << "physics.fastSim: no G4Region for model " << model.name() << "\n";
+      }
+      auto tool = art::make_tool<IMu2eG4FastSimModel>(model.tool.get<fhicl::ParameterSet>());
+      tool->construct(model.name(), region);
+      tools.push_back(tool.release());
+    }
+  }
+
   void Mu2eWorld::constructStepLimiters(){
 
     // G4LogicalVolume* hallAir        = _helper->locateVolInfo("HallAir").logical;

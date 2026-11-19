@@ -10,6 +10,7 @@
 // Mu2e includes
 #include "Offline/Mu2eG4/inc/EventNumberList.hh"
 #include "Offline/MCDataProducts/inc/StepPointMC.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4FastHit.hh"
 
 // G4 includes
 #include "Geant4/G4VSensitiveDetector.hh"
@@ -43,6 +44,10 @@ namespace mu2e {
                        const SimParticleHelper& spHelper);
 
   protected:
+
+    // Record a fast-simulation hit as a StepPointMC of the primary track of the G4FastTrack
+    void addFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                    const G4FastTrack& track, int volumeId);
 
     // Non-owning pointer to the  collection into which hits will be added.
     StepPointMCCollection* _collection = nullptr;

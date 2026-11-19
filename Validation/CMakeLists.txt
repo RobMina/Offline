@@ -38,6 +38,7 @@ cet_make_library(
       src/ValTrkCrvMatchMC.cc
     LIBRARIES PUBLIC
 
+      Offline::CosmicRayShieldGeom
       Offline::DataProducts
       Offline::GeometryService
       Offline::KinKalGeom

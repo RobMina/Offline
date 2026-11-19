@@ -11,12 +11,15 @@
 
 namespace mu2e {
 
-  class CRVSD : public Mu2eG4SensitiveDetector{
+  class CRVSD : public Mu2eG4SensitiveDetector, public IMu2eG4FastHitSD {
 
   public:
 
     CRVSD(G4String name, SimpleConfig const & config );
     G4bool ProcessHits(G4Step*, G4TouchableHistory*) override;
+
+    void processFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                        const G4FastTrack& track, const G4VTouchable& touchable) override;
 
   };
 

@@ -21,6 +21,7 @@
 #include "Offline/GeometryService/inc/WorldG4.hh"
 
 // G4 includes
+#include "Geant4/G4FastTrack.hh"
 #include "Geant4/G4RunManager.hh"
 #include "Geant4/G4Step.hh"
 #include "Geant4/G4ios.hh"
@@ -114,6 +115,41 @@ namespace mu2e {
 
   }//ProcessHits
 
+
+  void Mu2eG4SensitiveDetector::addFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                                           const G4FastTrack& track, int volumeId){
+
+    _currentSize += 1;
+    if ( _sizeLimit>0 && _currentSize>_sizeLimit ) {
+      if( (_currentSize - _sizeLimit)==1 ) {
+        mf::LogWarning("G4") << "Maximum number of steps reached in "
+                             << SensitiveDetectorName
+                             << ": "
+                             << _currentSize << endl;
+      }
+      return;
+    }
+
+    const G4Track* primary = track.GetPrimaryTrack();
+    const G4ThreeVector position = globalPosition - _mu2eOrigin;
+    // the primary track is killed by the fast-simulation process that made this hit
+    ProcessCode endCode(_processInfo->findAndCount(fastSimProcessName));
+    _collection->
+      push_back(StepPointMC(_spHelper->particlePtr(primary),
+                            volumeId,
+                            hit.edep,
+                            0.,
+                            hit.visibleEdep < 0. ? hit.edep : hit.visibleEdep,
+                            hit.time < 0. ? primary->GetGlobalTime() : hit.time,
+                            primary->GetProperTime(),
+                            position,
+                            position,
+                            primary->GetMomentum(),
+                            primary->GetMomentum(),
+                            hit.stepLength,
+                            endCode
+                            ));
+  }
 
   void Mu2eG4SensitiveDetector::EndOfEvent(G4HCofThisEvent*){
 

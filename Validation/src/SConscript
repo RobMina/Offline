@@ -14,6 +14,7 @@ rootlibs = env['ROOTLIBS']
 mainlib = helper.make_mainlib ( [ 'mu2e_Validation_root',
   'mu2e_Mu2eUtilities',
   'mu2e_GeometryService',
+  'mu2e_CosmicRayShieldGeom',
   'mu2e_TrackerGeom',
   'mu2e_TrackerConditions',
   'mu2e_MCDataProducts',

@@ -1,0 +1,20 @@
+#
+# g4test_03 with the test fast-simulation model on both calorimeter disks (Mu2eG4/doc/fastSimulation.md):
+# e-, e+ and photons entering a disk deposit their kinetic energy 100 mm along their entry direction and stop.
+#
+#include "Offline/Mu2eG4/fcl/g4test_03.fcl"
+
+process_name : G4TestFastSim
+services.TFileService.fileName : "g4test_fastSim.root"
+outputs.outfile.fileName : "data_fastSim.art"
+
+physics.producers.g4run.physics.fastSim : {
+  models : [
+    {
+      name : "caloDepositAtEntry"
+      envelopes : [ "CaloDisk_0", "CaloDisk_1" ]
+      particles : [ "e-", "e+", "gamma" ]
+      tool : { tool_type : "Mu2eG4FastSimDepositAtEntry" minKineticEnergy : 0. depth : 100. }
+    }
+  ]
+}

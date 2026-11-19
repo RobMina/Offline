@@ -1,11 +1,12 @@
 
 #include "Offline/Validation/inc/ValCrvDigi.hh"
+#include "Offline/Validation/inc/ValCrvBarAxis.hh"
 
 int mu2e::ValCrvDigi::declare(const art::TFileDirectory& tfs) {
   _hVer = tfs.make<TH1D>("Ver", "Version Number", 101, -0.5, 100.0);
   _hN = tfs.make<TH1D>("NDigis", "N Digis", 101, -0.5, 100.5);
   _hN2 = tfs.make<TH1D>("NDigis2", "N Digis", 100, -0.5, 4999.5);
-  _hI = tfs.make<TH1D>("BarId", "Bar ID", 200, -0.5, 5503.5);
+  _hI = tfs.make<TH1D>("BarId", "Bar ID", 200, -0.5, valCrvBarAxisMax());
   _hIS = tfs.make<TH1D>("SiPM", "SiPM", 4, -0.5, 3.5);
   _ht = tfs.make<TH1D>("t", "TDC", 100, 0.0, 250.0);
   _ht2 = tfs.make<TH1D>("t2", "TDC", 100, 0.0, 1.5e4);

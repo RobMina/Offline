@@ -23,6 +23,7 @@
 //    one of its known lists.  The default is QGSP_BERT 3.3.
 //
 // C++ includes
+#include <set>
 #include <string>
 
 // Framework includes
@@ -48,6 +49,7 @@
 #include "Geant4/G4ThermalNeutrons.hh"
 #include "Geant4/G4ErrorPhysicsList.hh"
 #include "Geant4/G4EmStandardPhysics_option4.hh"
+#include "Geant4/G4FastSimulationPhysics.hh"
 
 #if G4VERSION>4103
 #include "Geant4/G4EmParameters.hh"
@@ -69,6 +71,13 @@ namespace mu2e{
     const string name = phys.physicsListName();
 
     debug.diagLevel()>-1 && G4cout << __func__ << " invoked with " << name << G4endl;
+
+    Mu2eG4Config::FastSim fastSim;
+    const bool hasFastSim = phys.fastSim(fastSim);
+    if ( hasFastSim && ( name == "Minimal" || name == "MinDEDX" || name == "ErrorPhysicsList" ) ) {
+      throw cet::exception("G4CONTROL")
+        << "physics.fastSim needs a reference physics list, not " << name << "\n";
+    }
 
     // special cases
     if ( name  == "Minimal" ) {
@@ -123,6 +132,19 @@ namespace mu2e{
 
     // Mu2e Customizations
     tmpPL->RegisterPhysics( new Mu2eG4CustomizationPhysicsConstructor(&phys, &debug, &lim));
+
+    // Geant4 fast simulation: the models attach to their envelopes in Mu2eWorld::constructSDandField
+    if ( hasFastSim ) {
+      auto fastSimPhysics = new G4FastSimulationPhysics();
+      if ( fastSim.verbose() ) fastSimPhysics->BeVerbose();
+      std::set<std::string> particles;
+      for ( const auto& model : fastSim.models() ) {
+        const auto names = model.particles();
+        particles.insert(names.begin(), names.end());
+      }
+      for ( const auto& particle : particles ) fastSimPhysics->ActivateFastSimulation(particle);
+      tmpPL->RegisterPhysics(fastSimPhysics);
+    }
 
     if ( phys.turnOffRadioactiveDecay() && phys.turnOnRadioactiveDecay() ) {
       mf::LogError("Config") << "Inconsistent config";
