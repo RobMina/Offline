@@ -79,6 +79,7 @@ cet_make_library(
       src/Mu2eG4DecayMuonsWithSpinPhysicsConstructor.cc
       src/Mu2eG4DSGradientMagneticField.cc
       src/Mu2eG4EventAction.cc
+      src/Mu2eG4FastHitMaker.cc
       src/Mu2eG4GlobalMagneticField.cc
       src/Mu2eG4Inputs.cc
       src/Mu2eG4IOConfigHelper.cc
@@ -180,6 +181,7 @@ cet_make_library(
       ${G4LIBSUBSET}
       Geant4::G4error_propagation
       CLHEP::CLHEP
+      art::Utilities
 )
 
 
@@ -213,6 +215,12 @@ cet_build_plugin(CompositeMaterialGenerator art::module
 
 cet_build_plugin(ConstructEnvEmpty art::tool
     REG_SOURCE src/ConstructEnvEmpty_tool.cc
+    LIBRARIES REG
+        Offline::Mu2eG4
+)
+
+cet_build_plugin(Mu2eG4FastSimDepositAtEntry art::tool
+    REG_SOURCE src/Mu2eG4FastSimDepositAtEntry_tool.cc
     LIBRARIES REG
         Offline::Mu2eG4
 )

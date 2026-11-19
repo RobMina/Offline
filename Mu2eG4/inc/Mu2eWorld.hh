@@ -90,6 +90,8 @@ namespace mu2e {
     void constructMagnetYoke();
     void constructBFieldAndManagers();
     void constructStepLimiters();
+    void constructFastSimRegions();
+    void constructFastSimModels();
     void constructITStepLimiters();
 
     void instantiateSensitiveDetectors();

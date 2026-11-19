@@ -21,6 +21,7 @@
 // G4 includes
 #include "Geant4/G4LossTableManager.hh"
 #include "Geant4/G4Step.hh"
+#include "Geant4/G4VTouchable.hh"
 
 using namespace std;
 
@@ -75,5 +76,12 @@ namespace mu2e {
       return true;
 
   }//ProcessHits
+
+  void CRVSD::processFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                             const G4FastTrack& track, const G4VTouchable& touchable)
+  {
+    // same copy-number level as ProcessHits: the bar
+    addFastHit(hit, globalPosition, track, touchable.GetCopyNumber());
+  }
 
 } //namespace mu2e

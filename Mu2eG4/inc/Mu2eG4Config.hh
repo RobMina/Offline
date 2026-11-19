@@ -97,6 +97,25 @@ namespace mu2e {
       fhicl::Atom<size_t> minTrackerStepPoints {Name("minTrackerStepPoints"), 15};
     };
 
+    struct FastSimModel {
+      using Name = fhicl::Name;
+      using Comment = fhicl::Comment;
+      fhicl::Atom<std::string> name {Name("name"), Comment("Model name, also the name of its envelope G4Region")};
+      fhicl::Sequence<std::string> envelopes {Name("envelopes"),
+          Comment("Volume names (as registered with Mu2eG4Helper) whose logical volumes form the envelope region")};
+      fhicl::Sequence<std::string> particles {Name("particles"),
+          Comment("Geant4 particle names that get the fast-simulation process")};
+      fhicl::DelegatedParameter tool {Name("tool"),
+          Comment("art tool implementing IMu2eG4FastSimModel: tool_type and the tool's own parameters")};
+    };
+
+    struct FastSim {
+      using Name = fhicl::Name;
+      using Comment = fhicl::Comment;
+      fhicl::Sequence<fhicl::Table<FastSimModel>> models {Name("models")};
+      fhicl::Atom<bool> verbose {Name("verbose"), Comment("G4FastSimulationPhysics verbosity"), false};
+    };
+
     struct Physics {
       using Name = fhicl::Name;
       using Comment = fhicl::Comment;
@@ -166,6 +185,9 @@ namespace mu2e {
 
       OptionalDelegatedParameter BirksConsts {Name("BirksConsts")};
       OptionalDelegatedParameter minRangeRegionCuts {Name("minRangeRegionCuts")};
+
+      fhicl::OptionalTable<FastSim> fastSim {Name("fastSim"),
+          Comment("Geant4 fast-simulation models (Mu2eG4/doc/fastSimulation.md); absent means none")};
 
       fhicl::Atom<double> rangeToIgnore {Name("rangeToIgnore")};
     };

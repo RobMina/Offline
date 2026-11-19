@@ -11,13 +11,16 @@
 
 namespace mu2e {
 
-  class CaloCrystalSD : public Mu2eG4SensitiveDetector{
+  class CaloCrystalSD : public Mu2eG4SensitiveDetector, public IMu2eG4FastHitSD {
 
   public:
 
     CaloCrystalSD(G4String, const SimpleConfig& config);
 
     G4bool ProcessHits(G4Step*, G4TouchableHistory*) override;
+
+    void processFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                        const G4FastTrack& track, const G4VTouchable& touchable) override;
 
   };
 

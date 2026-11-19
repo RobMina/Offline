@@ -19,6 +19,7 @@
 // G4 includes
 #include "Geant4/G4LossTableManager.hh"
 #include "Geant4/G4Step.hh"
+#include "Geant4/G4VTouchable.hh"
 
 
 namespace mu2e {
@@ -78,6 +79,13 @@ namespace mu2e {
                                        ));
 
     return true;
+  }
+
+  void CaloCrystalSD::processFastHit(const Mu2eG4FastHit& hit, const G4ThreeVector& globalPosition,
+                                     const G4FastTrack& track, const G4VTouchable& touchable)
+  {
+    // same copy-number level as ProcessHits: the crystal id is the copy number of its wrapper
+    addFastHit(hit, globalPosition, track, touchable.GetCopyNumber(1));
   }
 
 }
