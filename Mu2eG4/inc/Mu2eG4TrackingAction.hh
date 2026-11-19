@@ -12,6 +12,7 @@
 
 #include "Geant4/G4UserTrackingAction.hh"
 
+#include "Offline/MCDataProducts/inc/ProcessCode.hh"
 #include "Offline/MCDataProducts/inc/SimParticle.hh"
 
 #include "Offline/Mu2eG4/inc/EventNumberList.hh"
@@ -60,6 +61,10 @@ namespace mu2e {
     void saveSimParticleStart(const G4Track* trk);
     void saveSimParticleEnd  (const G4Track* trk);
 
+    // SimParticle of a track handed to a physics.gpuOffload engine or killed at hand-over: it ends where it starts
+    void beginOffloadedParticle(const G4Track* trk);
+    void endOffloadedParticle(const G4Track* trk, ProcessCode stoppingCode);
+
     // Receive persistent volume information and save it for the duration of the run.
     void beginRun( const PhysicalVolumeHelper* physVolHelper,
                    PhysicsProcessInfo* processInfo,
@@ -73,6 +78,9 @@ namespace mu2e {
 
 
   private:
+
+    // SimParticles of the engine tracks registered with Mu2eG4OffloadTruth this event
+    void insertOffloadedParticles();
 
     typedef SimParticleCollection::key_type    key_type;
     typedef SimParticleCollection::mapped_type mapped_type;

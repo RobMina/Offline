@@ -116,6 +116,30 @@ namespace mu2e {
       fhicl::Atom<bool> verbose {Name("verbose"), Comment("G4FastSimulationPhysics verbosity"), false};
     };
 
+    struct GpuOffloadKill {
+      using Name = fhicl::Name;
+      using Comment = fhicl::Comment;
+      fhicl::Sequence<int> pdgIds {Name("pdgIds"), Comment("Particles the rule applies to")};
+      fhicl::Atom<double> maxKineticEnergy {Name("maxKineticEnergy"), Comment("Killed below this kinetic energy, MeV")};
+      fhicl::Sequence<std::string> volumes {Name("volumes"), Comment("Physical volume names where the track starts")};
+    };
+
+    struct GpuOffload {
+      using Name = fhicl::Name;
+      using Comment = fhicl::Comment;
+      fhicl::Sequence<std::string> regionVolumes {Name("regionVolumes"),
+          Comment("Volume names (as registered with Mu2eG4Helper) whose logical volumes root the Mu2eG4Offload region")};
+      fhicl::Sequence<std::string> extraRegions {Name("extraRegions"),
+          Comment("Existing G4Region names inside the offload volume that are offloaded too"), std::vector<std::string>{}};
+      fhicl::Sequence<std::string> particles {Name("particles"), Comment("Geant4 particle names handed to the engine"),
+          std::vector<std::string>{"e-", "e+", "gamma"}};
+      fhicl::OptionalSequence<fhicl::Table<GpuOffloadKill>> handOverKill {Name("handOverKill"),
+          Comment("Kill rules applied when a track is handed over (Mu2eG4CommonCut terms the engine cannot apply)")};
+      fhicl::DelegatedParameter engine {Name("engine"),
+          Comment("art tool implementing IMu2eG4Offload: tool_type and the tool's own parameters")};
+      fhicl::Atom<int> verbose {Name("verbose"), 0};
+    };
+
     struct Physics {
       using Name = fhicl::Name;
       using Comment = fhicl::Comment;
@@ -188,6 +212,8 @@ namespace mu2e {
 
       fhicl::OptionalTable<FastSim> fastSim {Name("fastSim"),
           Comment("Geant4 fast-simulation models (Mu2eG4/doc/fastSimulation.md); absent means none")};
+      fhicl::OptionalTable<GpuOffload> gpuOffload {Name("gpuOffload"),
+          Comment("Offload of e+-/gamma transport to an external engine (Mu2eG4/doc/gpuOffload.md); absent means none")};
 
       fhicl::Atom<double> rangeToIgnore {Name("rangeToIgnore")};
     };

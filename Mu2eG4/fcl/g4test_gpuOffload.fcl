@@ -1,0 +1,17 @@
+#
+# g4test_03 with the physics.gpuOffload test engine (Mu2eG4/doc/gpuOffload.md): e-, e+ and photons starting in
+# the DS vacuum volumes end at hand-over, each with one registered photon daughter; e+- below 1 MeV in DS2Vacuum
+# are killed at hand-over.
+#
+#include "Offline/Mu2eG4/fcl/g4test_03.fcl"
+
+process_name : G4TestGpuOffload
+services.TFileService.fileName : "g4test_gpuOffload.root"
+outputs.outfile.fileName : "data_gpuOffload.art"
+
+physics.producers.g4run.physics.gpuOffload : {
+  regionVolumes : [ "DS2Vacuum", "DS3Vacuum" ]
+  handOverKill : [ { pdgIds : [ 11, -11 ] maxKineticEnergy : 1.0 volumes : [ "DS2Vacuum" ] } ]
+  engine : { tool_type : "Mu2eG4OffloadKill" registerDaughter : true verbose : 0 }
+  verbose : 0
+}

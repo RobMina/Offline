@@ -18,6 +18,7 @@
 // Mu2e includes.
 
 #include "Offline/Mu2eG4/inc/Mu2eG4UserHelpers.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4OffloadTruth.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4UserTrackInformation.hh"
 #include "Offline/MCDataProducts/inc/ProcessCode.hh"
 #include "Offline/GeneralUtilities/inc/sqrtOrThrow.hh"
@@ -238,6 +239,11 @@ namespace mu2e {
     // Find the name of the process that defined the step
     // G4String const & findStepStoppingProcessName(G4Step const* const aStep){
     G4String findStepStoppingProcessName(G4Step const* const aStep){
+
+      // steps of a physics.gpuOffload engine's tracks, whatever process object the engine attached
+      if (aStep->GetTrack() && Mu2eG4OffloadTruth::isOffloadTrackId(aStep->GetTrack()->GetTrackID())) {
+        return G4String("mu2eGpuTransport");
+      }
 
       G4VProcess const* process = aStep->GetPostStepPoint()->GetProcessDefinedStep();
 

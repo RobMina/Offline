@@ -91,7 +91,7 @@ namespace mu2e {
       uninitialized, NoProcess, GammaGeneralProc, mu2eGammaConversion, // 187
       Radioactivation, nCaptureHP, nFissionHP, mu2eAntiproton, // 191
       mu2eFlatMuMinus, mu2eFlatMuPlus, Mu2eX, mu2eMuonBNV, // 195
-      fastSimProcess_massGeom, // 196
+      fastSimProcess_massGeom, mu2eGpuTransport, mu2eGpuSecondary, mu2eGpuPhotonSecondary, // 199
       lastEnum,
       // An alias for backward compatibility
       mu2eHallAir = mu2eKillerVolume
@@ -150,7 +150,7 @@ namespace mu2e {
       "uninitialized", "NoProcess", "GammaGeneralProc", \
       "mu2eGammaConversion","Radioactivation", "nCaptureHP", "nFissionHP", "mu2eAntiproton", \
       "mu2eFlatMuMinus", "mu2eFlatMuPlus", "Mu2eX", "mu2eMuonBNV", \
-      "fastSimProcess_massGeom"
+      "fastSimProcess_massGeom", "mu2eGpuTransport", "mu2eGpuSecondary", "mu2eGpuPhotonSecondary"
 #endif
 
   public:

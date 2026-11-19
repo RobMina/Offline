@@ -92,6 +92,7 @@ namespace mu2e {
     void constructStepLimiters();
     void constructFastSimRegions();
     void constructFastSimModels();
+    void constructOffloadRegion();
     void constructITStepLimiters();
 
     void instantiateSensitiveDetectors();

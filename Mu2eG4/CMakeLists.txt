@@ -88,6 +88,9 @@ cet_make_library(
       src/Mu2eG4MinimalModularPhysicsList.cc
       src/Mu2eG4MinimalPhysicsConstructor.cc
       src/Mu2eG4MTRunManager.cc
+      src/Mu2eG4OffloadPhysicsConstructor.cc
+      src/Mu2eG4OffloadTrackingManager.cc
+      src/Mu2eG4OffloadTruth.cc
       src/Mu2eG4PerThreadStorage.cc
       src/Mu2eG4PrimaryGeneratorAction.cc
       src/Mu2eG4PrimaryType.cc
@@ -221,6 +224,12 @@ cet_build_plugin(ConstructEnvEmpty art::tool
 
 cet_build_plugin(Mu2eG4FastSimDepositAtEntry art::tool
     REG_SOURCE src/Mu2eG4FastSimDepositAtEntry_tool.cc
+    LIBRARIES REG
+        Offline::Mu2eG4
+)
+
+cet_build_plugin(Mu2eG4OffloadKill art::tool
+    REG_SOURCE src/Mu2eG4OffloadKill_tool.cc
     LIBRARIES REG
         Offline::Mu2eG4
 )

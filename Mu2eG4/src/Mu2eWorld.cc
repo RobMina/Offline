@@ -338,6 +338,7 @@ namespace mu2e {
     }
 
     constructFastSimRegions();
+    constructOffloadRegion();
 
     constructStepLimiters();
 
@@ -663,6 +664,35 @@ namespace mu2e {
         G4cout << __func__ << " fast-simulation region " << name << " with " << envelopes.size()
                << " envelope volume(s)" << G4endl;
       }
+    }
+  }
+
+  // The physics.gpuOffload region Mu2eG4Offload, rooted at the configured volumes; shared by all threads
+  void Mu2eWorld::constructOffloadRegion(){
+
+    Mu2eG4Config::GpuOffload gpuOffload;
+    if ( !conf_.physics().gpuOffload(gpuOffload) ) return;
+
+    const std::string name("Mu2eG4Offload");
+    if ( G4RegionStore::GetInstance()->GetRegion(name, false) != nullptr ) {
+      throw cet::exception("CONFIG") << "physics.gpuOffload: a G4Region named " << name << " exists already\n";
+    }
+    const auto volumes = gpuOffload.regionVolumes();
+    if ( volumes.empty() ) {
+      throw cet::exception("CONFIG") << "physics.gpuOffload: regionVolumes is empty\n";
+    }
+    G4Region* region = new G4Region(name); // G4RegionStore takes ownership
+    for ( const auto& volName : volumes ) {
+      G4LogicalVolume* logical = _helper->locateVolInfo(volName).logical;
+      if ( logical->IsRootRegion() ) {
+        throw cet::exception("CONFIG") << "physics.gpuOffload: volume " << volName << " is already the root of region "
+                                       << logical->GetRegion()->GetName() << "; list that region in extraRegions\n";
+      }
+      logical->SetRegion(region);
+      region->AddRootLogicalVolume(logical);
+    }
+    if ( _verbosityLevel > 0 ) {
+      G4cout << __func__ << " offload region " << name << " with " << volumes.size() << " root volume(s)" << G4endl;
     }
   }
 

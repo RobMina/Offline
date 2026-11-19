@@ -50,6 +50,8 @@
 #include "Geant4/G4ErrorPhysicsList.hh"
 #include "Geant4/G4EmStandardPhysics_option4.hh"
 #include "Geant4/G4FastSimulationPhysics.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4OffloadPhysicsConstructor.hh"
+#include <algorithm>
 
 #if G4VERSION>4103
 #include "Geant4/G4EmParameters.hh"
@@ -74,6 +76,23 @@ namespace mu2e{
 
     Mu2eG4Config::FastSim fastSim;
     const bool hasFastSim = phys.fastSim(fastSim);
+    Mu2eG4Config::GpuOffload gpuOffload;
+    const bool hasGpuOffload = phys.gpuOffload(gpuOffload);
+    if ( hasGpuOffload && ( name == "Minimal" || name == "MinDEDX" || name == "ErrorPhysicsList" ) ) {
+      throw cet::exception("G4CONTROL")
+        << "physics.gpuOffload needs a reference physics list, not " << name << "\n";
+    }
+    if ( hasFastSim && hasGpuOffload ) {
+      const auto offloaded = gpuOffload.particles();
+      for ( const auto& model : fastSim.models() ) {
+        for ( const auto& particle : model.particles() ) {
+          if ( std::find(offloaded.begin(), offloaded.end(), particle) != offloaded.end() ) {
+            throw cet::exception("G4CONTROL") << "physics.fastSim model " << model.name() << " and physics.gpuOffload"
+                                              << " both claim " << particle << "\n";
+          }
+        }
+      }
+    }
     if ( hasFastSim && ( name == "Minimal" || name == "MinDEDX" || name == "ErrorPhysicsList" ) ) {
       throw cet::exception("G4CONTROL")
         << "physics.fastSim needs a reference physics list, not " << name << "\n";
@@ -144,6 +163,11 @@ namespace mu2e{
       }
       for ( const auto& particle : particles ) fastSimPhysics->ActivateFastSimulation(particle);
       tmpPL->RegisterPhysics(fastSimPhysics);
+    }
+
+    // physics.gpuOffload: a tracking manager per thread for the offloaded particles (Mu2eG4/doc/gpuOffload.md)
+    if ( hasGpuOffload ) {
+      tmpPL->RegisterPhysics(new Mu2eG4OffloadPhysicsConstructor(&phys));
     }
 
     if ( phys.turnOffRadioactiveDecay() && phys.turnOnRadioactiveDecay() ) {

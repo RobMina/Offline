@@ -37,6 +37,7 @@
 #include "Offline/Mu2eG4/inc/Mu2eG4ResourceLimits.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4TrajectoryControl.hh"
 #include "Offline/Mu2eG4/inc/Mu2eG4PerThreadStorage.hh"
+#include "Offline/Mu2eG4/inc/Mu2eG4OffloadTruth.hh"
 #include "Offline/DataProducts/inc/PDGCode.hh"
 #include "Offline/MCDataProducts/inc/SimParticle.hh"
 #include "Offline/MCDataProducts/inc/StageParticle.hh"
@@ -51,6 +52,8 @@
 // G4 includes
 #include "Geant4/globals.hh"
 #include "Geant4/G4Event.hh"
+#include "Geant4/G4TrackStatus.hh"
+#include "Geant4/G4VPhysicalVolume.hh"
 #include "Geant4/G4Ions.hh"
 #include "Geant4/G4IonTable.hh"
 #include "Geant4/G4RunManager.hh"
@@ -343,6 +346,7 @@ namespace mu2e {
 
 
   void Mu2eG4TrackingAction::beginEvent() {
+    Mu2eG4OffloadTruth::instance().beginEvent();
     const Mu2eG4IOConfigHelper& ioconf = perThreadObjects_->ioconf;
 
     // Read in data products from previous stages and reseat SimParticle pointers
@@ -398,6 +402,7 @@ namespace mu2e {
 
   void Mu2eG4TrackingAction::endEvent(){
 
+    if ( Mu2eG4OffloadTruth::instance().active() ) insertOffloadedParticles();
     Mu2eG4UserHelpers::checkCrossReferences(true,true,_transientMap);
     perThreadObjects_->simPartCollection->insert( _transientMap.begin(), _transientMap.end() );
     _transientMap.clear();
@@ -405,6 +410,61 @@ namespace mu2e {
     if ( !_debugList.inList() ) return;
   }
 
+
+  void Mu2eG4TrackingAction::beginOffloadedParticle(const G4Track* trk){
+    if ( trk->GetUserInformation() == nullptr ) {
+      const_cast<G4Track*>(trk)->SetUserInformation(new Mu2eG4UserTrackInformation());
+    }
+    saveSimParticleStart(trk);
+  }
+
+  void Mu2eG4TrackingAction::endOffloadedParticle(const G4Track* trk, ProcessCode stoppingCode){
+    key_type kid(perThreadObjects_->simParticleHelper->particleKeyFromG4TrackID(trk->GetTrackID()));
+    map_type::iterator i(_transientMap.find(kid));
+    if ( i == _transientMap.end() ){
+      if ( _overflowSimParticles ) return; // saveSimParticleStart stopped at the size limit
+      throw cet::exception("RANGE") << "No SimParticle for offloaded track in " << __func__ << ".  id: " << kid << "\n";
+    }
+    i->second.addEndInfo( trk->GetPosition()-_mu2eOrigin,
+                          CLHEP::HepLorentzVector(trk->GetMomentum(),trk->GetTotalEnergy()),
+                          trk->GetGlobalTime(),
+                          trk->GetProperTime(),
+                          _physVolHelper->index(trk),
+                          fStopAndKill,
+                          stoppingCode,
+                          trk->GetKineticEnergy(),
+                          0,
+                          0.);
+  }
+
+  void Mu2eG4TrackingAction::insertOffloadedParticles(){
+    const SimParticleHelper& helper = *perThreadObjects_->simParticleHelper;
+    for ( const auto& p : Mu2eG4OffloadTruth::instance().particles() ) {
+      const key_type kid(helper.particleKeyFromG4TrackID(p.trackId));
+      const art::Ptr<SimParticle> parentPtr = helper.particlePtrFromG4TrackID(p.parentTrackId);
+      map_type::iterator parent(_transientMap.find(key_type(parentPtr.key())));
+      if ( parent == _transientMap.end() ){
+        throw cet::exception("RANGE") << "No parent SimParticle " << parentPtr.key()
+                                      << " for offloaded particle " << kid << " in " << __func__ << "\n";
+      }
+      const unsigned startVolume = p.startVolume ? _physVolHelper->index(const_cast<G4VPhysicalVolume*>(p.startVolume)) : 0;
+      SimParticle sim(kid, helper.simStage(), parentPtr, static_cast<PDGCode::type>(p.pdgId), art::Ptr<GenParticle>(),
+                      p.startPosition-_mu2eOrigin, p.startMomentum, p.startGlobalTime, 0., startVolume, fAlive,
+                      p.creationCode);
+      if ( p.hasEnd ) {
+        const unsigned endVolume = p.endVolume ? _physVolHelper->index(const_cast<G4VPhysicalVolume*>(p.endVolume)) : 0;
+        sim.addEndInfo(p.endPosition-_mu2eOrigin, p.endMomentum, p.endGlobalTime, 0., endVolume, fStopAndKill,
+                       p.stoppingCode, p.endMomentum.e()-p.endMomentum.m(), 0, 0.);
+      } else {
+        sim.addEndInfo(p.startPosition-_mu2eOrigin, p.startMomentum, p.startGlobalTime, 0., startVolume, fStopAndKill,
+                       ProcessCode(ProcessCode::mu2eGpuTransport), p.startMomentum.e()-p.startMomentum.m(), 0, 0.);
+      }
+      if ( !_transientMap.insert(std::make_pair(kid, sim)).second ){
+        throw cet::exception("RANGE") << "Offloaded particle " << kid << " is already in the event\n";
+      }
+      parent->second.addDaughter(helper.particlePtrFromG4TrackID(p.trackId));
+    }
+  }
 
   // Save start of track info.
   void Mu2eG4TrackingAction::saveSimParticleStart(const G4Track* trk){
