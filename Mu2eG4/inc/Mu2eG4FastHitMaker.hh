@@ -12,6 +12,7 @@
 #include "Offline/Mu2eG4/inc/Mu2eG4FastHit.hh"
 
 class G4Navigator;
+class G4VPhysicalVolume;
 
 namespace mu2e {
 
@@ -22,6 +23,9 @@ namespace mu2e {
 
     // True if a sensitive detector recorded the hit
     bool make(const Mu2eG4FastHit& hit, const G4FastTrack& track);
+
+    // Volume the last hit fell in (nullptr before the first hit or outside the world), for diagnostics
+    const G4VPhysicalVolume* lastVolume() const;
 
   private:
     std::unique_ptr<G4Navigator> navigator_;

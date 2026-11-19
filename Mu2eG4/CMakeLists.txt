@@ -79,6 +79,7 @@ cet_make_library(
       src/Mu2eG4DecayMuonsWithSpinPhysicsConstructor.cc
       src/Mu2eG4DSGradientMagneticField.cc
       src/Mu2eG4EventAction.cc
+      src/Mu2eG4CaloEntrantLibrary.cc
       src/Mu2eG4FastHitMaker.cc
       src/Mu2eG4GlobalMagneticField.cc
       src/Mu2eG4Inputs.cc
@@ -182,6 +183,9 @@ cet_make_library(
       Geant4::G4error_propagation
       CLHEP::CLHEP
       art::Utilities
+      ROOT::Core
+      ROOT::RIO
+      ROOT::Tree
 )
 
 
@@ -223,6 +227,15 @@ cet_build_plugin(Mu2eG4FastSimDepositAtEntry art::tool
     REG_SOURCE src/Mu2eG4FastSimDepositAtEntry_tool.cc
     LIBRARIES REG
         Offline::Mu2eG4
+)
+
+cet_build_plugin(Mu2eG4FastSimCaloEntrantLibrary art::tool
+    REG_SOURCE src/Mu2eG4FastSimCaloEntrantLibrary_tool.cc
+    LIBRARIES REG
+        Offline::Mu2eG4
+        Offline::CalorimeterGeom
+        Offline::ConfigTools
+        Offline::GeometryService
 )
 
 cet_build_plugin(IonProducer art::module

@@ -1,0 +1,29 @@
+#
+# g4test_03 with the per-entrant calorimeter shower library on both disks (Mu2eG4/doc/fastSimulation.md):
+# electrons entering a disk through its front face or inner edge are replaced by a Geant4 donor shower from the
+# library; everything else stays with full Geant4. Set libraryFile to the library's ROOT export (an absolute path,
+# or a name found on FW_SEARCH_PATH) and, to pin it, contentHash to its content_hash.
+#
+#include "Offline/Mu2eG4/fcl/g4test_03.fcl"
+
+process_name : G4TestFastSimCaloLibrary
+services.TFileService.fileName : "g4test_fastSimCaloLibrary.root"
+outputs.outfile.fileName : "data_fastSimCaloLibrary.art"
+
+physics.producers.g4run.physics.fastSim : {
+  models : [
+    {
+      name : "caloEntrantLibrary"
+      envelopes : [ "CaloDisk_0", "CaloDisk_1" ]
+      particles : [ "e-" ]
+      tool : {
+        tool_type : "Mu2eG4FastSimCaloEntrantLibrary"
+        libraryFile : "entrants_ce_mdc2025ba.root"
+        donorSelection : "nearest"
+        nearestK : 1
+        maxEntryDistance : 20.
+        maxEnergyDeviation : 0.1
+      }
+    }
+  ]
+}

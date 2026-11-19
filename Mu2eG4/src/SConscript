@@ -264,7 +264,7 @@ mainlib = helper.make_mainlib ( [
         GS_LIBS,
         XERCESC_LIBS,
         'CLHEP',
-        'Hist', 'Tree', 'Core',
+        'Hist', 'Tree', 'RIO', 'Core',
         'boost_regex',
         'tbb',
         'pthread'
@@ -279,6 +279,7 @@ helper.make_plugins( [
     'mu2e_Mu2eUtilities',
     'mu2e_GeometryService',
     'mu2e_GeometryService',
+    'mu2e_CalorimeterGeom',
     'mu2e_Mu2eHallGeom',
     'mu2e_MCDataProducts',
     'mu2e_ConfigTools',
@@ -304,7 +305,7 @@ helper.make_plugins( [
     GS_LIBS,
     XERCESC_LIBS,
     'CLHEP',
-    'Tree', 'Core',
+    'Tree', 'RIO', 'Core',
     'boost_filesystem',
     'tbb',
     'pthread'

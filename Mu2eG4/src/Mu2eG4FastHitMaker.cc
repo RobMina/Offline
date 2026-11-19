@@ -22,6 +22,10 @@ namespace mu2e {
 
   Mu2eG4FastHitMaker::~Mu2eG4FastHitMaker() = default;
 
+  const G4VPhysicalVolume* Mu2eG4FastHitMaker::lastVolume() const {
+    return located_ ? touchable_->GetVolume() : nullptr;
+  }
+
   bool Mu2eG4FastHitMaker::make(const Mu2eG4FastHit& hit, const G4FastTrack& track) {
     if (hit.edep <= 0.) return false;
 
