@@ -52,6 +52,7 @@
 #include "Geant4/G4VUserPhysicsList.hh"
 
 // C++ includes.
+#include <algorithm>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
@@ -64,6 +65,7 @@
 
 // TBB includes
 #include "tbb/concurrent_hash_map.h"
+#include "tbb/task_arena.h"
 #include "tbb/task_group.h"
 
 using namespace std;
@@ -378,9 +380,11 @@ namespace mu2e {
       masterThread->masterRunManagerPtr()->getMasterPhysicsList()->StorePhysicsTable(storePhysicsTablesDir_);
     }
 
-    std::atomic<int> threads_left = num_threads;
+    // Each task holds its thread until all have started, so ask for no more tasks than TBB can run at once.
+    int const num_tasks = std::min(num_threads, tbb::this_task_arena::max_concurrency());
+    std::atomic<int> threads_left = num_tasks;
     tbb::task_group g;
-    for (int i = 0; i < num_threads; ++i) {
+    for (int i = 0; i < num_tasks; ++i) {
 
       auto destroy_worker = [&threads_left, i, this] {
         WorkerRMMap::accessor access_workerMap;
