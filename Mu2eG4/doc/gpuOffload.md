@@ -25,6 +25,10 @@ physics.producers.g4run.physics.gpuOffload : {
    SimParticle is made and ended at the hand-over point (stopping code `mu2eGpuTransport`) and the engine takes the
    track. Otherwise stock Geant4 tracks it on the CPU, with the Mu2e user actions; its secondaries go back to the stack.
    An engine whose `routesByRegion()` is true receives every track instead, and does its own routing and SimParticles.
+   An engine that brings its own Geant4 tracking manager (`IMu2eG4Offload::trackingManager()`, e.g. AdePT's, which
+   tracks e+-/gamma outside its regions on the CPU with G4HepEm and returns tracks that leave them) gets every track
+   after the kill rules, and the physics tables and the event flush too; `offload()` and `physicsTableBuilt()` are
+   then not called.
 3. **End of event.** Geant4 calls `FlushEvent` when its stack is empty; the engine finishes its tracks, sends the
    steps in sensitive volumes to the Mu2e sensitive detectors and gives back any track that leaves its region.
 
@@ -37,6 +41,20 @@ daughters of their registered parent, before the cross-reference check. Steps of
 process `mu2eGpuTransport`. If the engine returns no creation process, `Mu2eG4OffloadTruth::inferCreationCode`
 gives `eIoni` (e- from e+-), `eBrem` (photon from e+-), `mu2eGpuPhotonSecondary` (e+- from a photon) or
 `mu2eGpuSecondary`. With `eIoni`, `MakeStrawGasSteps` folds short delta rays as in stock.
+
+### Engines that call the Mu2e tracking action
+
+An engine with its own tracking manager can make SimParticles through the stock `Mu2eG4TrackingAction` instead of
+`Mu2eG4OffloadTruth`: AdePT (with `returnFirstAndLastStep` and `callUserTrackingAction`) calls
+`PreUserTrackingAction` for each device-born track and `PostUserTrackingAction` at each device track's last step,
+when it replays returned steps, outside any CPU stepping and interleaved across tracks. Its device-born tracks get
+Geant4 track IDs counting down from 2^31-1, above `firstTrackId`.
+
+`Mu2eG4SteppingAction` keeps one trajectory buffer, which belongs to the track begun last
+(`BeginOfTrack(trackId)`), or to a track that steps without being begun again (a track the engine returns to the
+CPU). `PostUserTrackingAction` moves the buffer into the track's `MCTrajectory` only if the track owns it
+(`ownsTrajectory`). So device tracks get no `MCTrajectory`, or only their CPU part, and never another track's points.
+Without an engine every track owns its buffer, so stock output is unchanged.
 
 ## Tests
 

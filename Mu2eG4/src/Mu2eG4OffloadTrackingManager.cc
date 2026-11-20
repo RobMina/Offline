@@ -33,6 +33,7 @@ namespace mu2e {
                                                              bool routeAll,
                                                              int verbose)
     : engine_(engine)
+    , delegate_(engine->trackingManager())
     , regionNames_(std::move(regionNames))
     , killRules_(std::move(killRules))
     , routeAll_(routeAll)
@@ -41,6 +42,10 @@ namespace mu2e {
 
   // The particle's CPU processes keep their tables: tracks outside the offload regions use them
   void Mu2eG4OffloadTrackingManager::PreparePhysicsTable(const G4ParticleDefinition& particle) {
+    if ( delegate_ != nullptr ) {
+      delegate_->PreparePhysicsTable(particle);
+      return;
+    }
     G4ProcessManager* manager = particle.GetProcessManager();
     const bool master = manager == particle.GetMasterProcessManager();
     G4ProcessVector* processes = manager->GetProcessList();
@@ -51,6 +56,10 @@ namespace mu2e {
   }
 
   void Mu2eG4OffloadTrackingManager::BuildPhysicsTable(const G4ParticleDefinition& particle) {
+    if ( delegate_ != nullptr ) {
+      delegate_->BuildPhysicsTable(particle);
+      return;
+    }
     G4ProcessManager* manager = particle.GetProcessManager();
     const bool master = manager == particle.GetMasterProcessManager();
     G4ProcessVector* processes = manager->GetProcessList();
@@ -116,6 +125,15 @@ namespace mu2e {
 
   void Mu2eG4OffloadTrackingManager::HandOverOneTrack(G4Track* track) {
     if ( !resolved_ ) resolve();
+
+    // An engine with its own tracking manager routes, tracks and returns tracks itself: only the kill rules run here,
+    // and the start volume is located only when there are rules
+    if ( delegate_ != nullptr && !hasKillRules() ) {
+      ++nOffloaded_;
+      delegate_->HandOverOneTrack(track);
+      return;
+    }
+
     const G4VPhysicalVolume* volume = locate(track);
 
     if ( volume != nullptr && killedAtHandOver(track, volume) ) {
@@ -126,6 +144,12 @@ namespace mu2e {
       }
       ++nKilled_;
       delete track;
+      return;
+    }
+
+    if ( delegate_ != nullptr ) {
+      ++nOffloaded_;
+      delegate_->HandOverOneTrack(track);
       return;
     }
 
@@ -165,6 +189,7 @@ namespace mu2e {
   }
 
   void Mu2eG4OffloadTrackingManager::FlushEvent() {
+    if ( delegate_ != nullptr ) delegate_->FlushEvent();
     engine_->flushEvent();
     if ( verbose_ > 1 ) {
       G4cout << "Mu2eG4OffloadTrackingManager: offloaded " << nOffloaded_ << " killed at hand-over " << nKilled_

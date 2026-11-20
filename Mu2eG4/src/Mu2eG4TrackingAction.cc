@@ -302,7 +302,7 @@ namespace mu2e {
     Mu2eG4UserHelpers::controlTrajectorySaving(trk, _sizeLimit, _currentSize,
                                                _saveTrajectoryMomentumCut);
 
-    _steppingAction->BeginOfTrack();
+    _steppingAction->BeginOfTrack(trk->GetTrackID());
 
     if ( !_debugList.inList() ) return;
     Mu2eG4UserHelpers::printTrackInfo( trk, "Start new Track: ", _transientMap,
@@ -323,13 +323,20 @@ namespace mu2e {
     // Finalize the SimParticle
     saveSimParticleEnd(trk);
 
-    // If this particle passes the cuts, add the trajectory
-    // information to the data product.
+    // An offload engine (physics.gpuOffload, e.g. AdePT) calls this for its device tracks when it replays their
+    // last step, outside any CPU stepping and interleaved with other tracks. The stepping action then holds another
+    // track's points or none, unless no other track began since this one's CPU steps. A track that does not own the
+    // points gets no MCTrajectory and leaves the stepping action's state alone; one that does gets its CPU part.
+    // Without an engine every track owns its points, as before.
+    if ( _steppingAction->ownsTrajectory(trk->GetTrackID()) ) {
 
-    swapTrajectory(trk);
+      // If this particle passes the cuts, add the trajectory
+      // information to the data product.
+      swapTrajectory(trk);
 
-    // Any other clean up.
-    _steppingAction->EndOfTrack();
+      // Any other clean up.
+      _steppingAction->EndOfTrack();
+    }
 
     if ( !_debugList.inList() ) return;
     Mu2eG4UserHelpers::printTrackInfo( trk, "End Track:       ", _transientMap,

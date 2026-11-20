@@ -6,6 +6,7 @@
 
 class G4ParticleDefinition;
 class G4Track;
+class G4VTrackingManager;
 
 namespace mu2e {
 
@@ -15,6 +16,12 @@ namespace mu2e {
 
     // Called from ConstructProcess on every thread, master included, before the tracking managers are attached
     virtual void construct(bool isMaster) = 0;
+
+    // An engine that brings its own Geant4 tracking manager (AdePT: CPU tracking outside its regions, hand-over on
+    // region entry, step replay to the SDs) returns it here, valid after construct(). Mu2eG4OffloadTrackingManager
+    // then applies the hand-over kill rules and passes physics tables, tracks and the event flush to it; offload()
+    // and physicsTableBuilt() are not called.
+    virtual G4VTrackingManager* trackingManager() { return nullptr; }
 
     // True: offload() gets every track and the engine routes by region and makes the SimParticles of its tracks
     virtual bool routesByRegion() const { return false; }

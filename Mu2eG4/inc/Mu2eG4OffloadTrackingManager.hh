@@ -3,7 +3,8 @@
 //
 // Geant4 tracking manager of the physics.gpuOffload particles (one per thread, shared by the particles): applies the
 // hand-over kill rules, routes tracks starting in the offload regions to the engine and tracks the others on the CPU
-// with the stock Geant4 tracking (Mu2eG4/doc/gpuOffload.md)
+// with the stock Geant4 tracking. An engine with its own tracking manager (IMu2eG4Offload::trackingManager) gets
+// everything after the kill rules instead (Mu2eG4/doc/gpuOffload.md)
 //
 
 #include <set>
@@ -15,6 +16,7 @@
 
 class G4Region;
 class G4VPhysicalVolume;
+class G4VTrackingManager;
 
 namespace mu2e {
 
@@ -51,9 +53,11 @@ namespace mu2e {
     bool killedAtHandOver(const G4Track* track, const G4VPhysicalVolume* volume) const;
     void attachTouchable(G4Track* track);
     void trackOnCPU(G4Track* track);
+    bool hasKillRules() const { return !killRules_.empty(); }
     Mu2eG4TrackingAction* mu2eTrackingAction() const;
 
     IMu2eG4Offload* engine_;
+    G4VTrackingManager* delegate_;  // the engine's own tracking manager, or null
     std::vector<std::string> regionNames_;
     std::vector<KillRule> killRules_;
     bool routeAll_;

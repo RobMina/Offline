@@ -49,8 +49,16 @@ namespace mu2e {
 
     void BeginOfEvent(StepPointMCCollection* outputHits, const SimParticleHelper& spHelper);
 
-    void BeginOfTrack();
+    // The per-track state (trajectory points, step count) belongs to one track at a time: the track begun last, or
+    // the track whose step arrived first after another track's (a track an offload engine returns to the CPU
+    // steps again without a new BeginOfTrack). Steps of a different track reset the state.
+    void BeginOfTrack(int trackId);
     void EndOfTrack();
+
+    // True if the trajectory points held now were recorded for this track. False for a track whose steps were taken
+    // by an offload engine (physics.gpuOffload): the engine calls the tracking action for it outside any CPU
+    // stepping, so the points held belong to another track or to none.
+    bool ownsTrajectory(int trackId) const { return currentTrackId_ == trackId; }
 
     // Called by G4_plugin.
     void beginRun(PhysicsProcessInfo*, CLHEP::Hep3Vector const& mu2eOrigin );
@@ -84,6 +92,8 @@ namespace mu2e {
 
     // Protection against "too complicated" events
     unsigned numTrackSteps_;
+    // Track the per-track state belongs to; 0 = none
+    int currentTrackId_ = 0;
     bool stepLimitKillerVerbose_;
 
     // List of times for time virtual detector

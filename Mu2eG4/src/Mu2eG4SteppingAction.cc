@@ -97,7 +97,8 @@ namespace mu2e {
     }
   }
 
-  void Mu2eG4SteppingAction::BeginOfTrack() {
+  void Mu2eG4SteppingAction::BeginOfTrack(int trackId) {
+    currentTrackId_ = trackId;
     numTrackSteps_ = 0;
     const auto oldSize = _trajectory.size();
     _trajectory.clear();
@@ -105,6 +106,7 @@ namespace mu2e {
   }
 
   void Mu2eG4SteppingAction::EndOfTrack() {
+    currentTrackId_ = 0;
   }
 
 
@@ -118,9 +120,14 @@ namespace mu2e {
 
   void Mu2eG4SteppingAction::UserSteppingAction(const G4Step* step){
 
-    ++numTrackSteps_;
-
     G4Track* track = step->GetTrack();
+
+    // A step of a track that was not begun last: a track an offload engine returned to the CPU (no new
+    // PreUserTrackingAction). Start its state afresh rather than append to another track's points.
+    // Never true without physics.gpuOffload: every track is begun before it steps.
+    if ( track->GetTrackID() != currentTrackId_ ) BeginOfTrack(track->GetTrackID());
+
+    ++numTrackSteps_;
 
     // Pre and post stepping points.
     G4StepPoint const* prept  = step->GetPreStepPoint();
