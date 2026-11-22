@@ -130,7 +130,7 @@ namespace mu2e {
     // and the start volume is located only when there are rules
     if ( delegate_ != nullptr && !hasKillRules() ) {
       ++nOffloaded_;
-      delegate_->HandOverOneTrack(track);
+      handToDelegate(track);
       return;
     }
 
@@ -149,7 +149,7 @@ namespace mu2e {
 
     if ( delegate_ != nullptr ) {
       ++nOffloaded_;
-      delegate_->HandOverOneTrack(track);
+      handToDelegate(track);
       return;
     }
 
@@ -174,6 +174,16 @@ namespace mu2e {
     trackOnCPU(track);
   }
 
+  // The engine's manager reads G4TrackingManager's trajectory flag also for tracks given without a new Pre: clear it
+  void Mu2eG4OffloadTrackingManager::clearTrajectoryRequest() {
+    G4EventManager::GetEventManager()->GetTrackingManager()->SetStoreTrajectory(0);
+  }
+
+  void Mu2eG4OffloadTrackingManager::handToDelegate(G4Track* track) {
+    clearTrajectoryRequest();
+    delegate_->HandOverOneTrack(track);
+  }
+
   // Stock Geant4 tracking, user actions included; this manager owns the track and stacks its secondaries
   void Mu2eG4OffloadTrackingManager::trackOnCPU(G4Track* track) {
     G4EventManager* eventManager = G4EventManager::GetEventManager();
@@ -189,7 +199,10 @@ namespace mu2e {
   }
 
   void Mu2eG4OffloadTrackingManager::FlushEvent() {
-    if ( delegate_ != nullptr ) delegate_->FlushEvent();
+    if ( delegate_ != nullptr ) {
+      clearTrajectoryRequest();
+      delegate_->FlushEvent();
+    }
     engine_->flushEvent();
     if ( verbose_ > 1 ) {
       G4cout << "Mu2eG4OffloadTrackingManager: offloaded " << nOffloaded_ << " killed at hand-over " << nKilled_

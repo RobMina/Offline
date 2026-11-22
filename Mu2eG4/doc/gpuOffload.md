@@ -63,7 +63,10 @@ Only `G4TrackingManager::ProcessOneTrack` creates Geant4 trajectories (`G4Trajec
 only for particles without their own tracking manager. With an engine such as AdePT, e-, e+ and gamma tracked on the
 CPU go through G4HepEm, which takes `G4TrackingManager::GimmeTrajectory()` whenever trajectory storing is on: that
 would be the trajectory of the last track `G4TrackingManager` tracked, owned by the `G4Event`, and G4HepEm would append
-to it and delete it (a use-after-free and a double delete).
+to it and delete it (a use-after-free and a double delete). The flag is global: a track the engine returns to the CPU
+gets no new `PreUserTrackingAction`, and would see the value the last track (e.g. a proton) left. So
+`Mu2eG4OffloadTrackingManager` clears it (`SetStoreTrajectory(0)`) before every hand-over to the engine's manager and
+before its `FlushEvent`.
 
 ## Tests
 

@@ -53,6 +53,8 @@ namespace mu2e {
     bool killedAtHandOver(const G4Track* track, const G4VPhysicalVolume* volume) const;
     void attachTouchable(G4Track* track);
     void trackOnCPU(G4Track* track);
+    static void clearTrajectoryRequest();
+    void handToDelegate(G4Track* track);
     bool hasKillRules() const { return !killRules_.empty(); }
     Mu2eG4TrackingAction* mu2eTrackingAction() const;
 
