@@ -46,7 +46,9 @@ namespace mu2e {
 
       // Do not add the trajectory if the corresponding SimParticle is missing or if it fails momentum cut
 
-      bool keep = ( sizeLimit<=0 || currentSize<sizeLimit ) &&
+      // Only G4TrackingManager makes G4 trajectories; a particle with its own G4VTrackingManager (gpuOffload) gets none
+      bool keep = trk->GetParticleDefinition()->GetTrackingManager() == nullptr &&
+        ( sizeLimit<=0 || currentSize<sizeLimit ) &&
         saveThisTrajectory(trk, pointTrajectoryMomentumCut);
 
       G4TrackingManager* trkmgr = G4EventManager::GetEventManager()->GetTrackingManager();

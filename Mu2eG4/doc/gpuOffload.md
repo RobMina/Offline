@@ -56,6 +56,15 @@ CPU). `PostUserTrackingAction` moves the buffer into the track's `MCTrajectory` 
 (`ownsTrajectory`). So device tracks get no `MCTrajectory`, or only their CPU part, and never another track's points.
 Without an engine every track owns its buffer, so stock output is unchanged.
 
+### Geant4 trajectories
+
+Only `G4TrackingManager::ProcessOneTrack` creates Geant4 trajectories (`G4Trajectory`, which no Mu2e product uses;
+`MCTrajectory` comes from `Mu2eG4SteppingAction`). `Mu2eG4UserHelpers::controlTrajectorySaving` therefore asks for one
+only for particles without their own tracking manager. With an engine such as AdePT, e-, e+ and gamma tracked on the
+CPU go through G4HepEm, which takes `G4TrackingManager::GimmeTrajectory()` whenever trajectory storing is on: that
+would be the trajectory of the last track `G4TrackingManager` tracked, owned by the `G4Event`, and G4HepEm would append
+to it and delete it (a use-after-free and a double delete).
+
 ## Tests
 
 - `Mu2eG4/fcl/g4test_gpuOffload.fcl` and `g4test_gpuOffloadMT.fcl`: the test engine on the DS vacuum volumes.
