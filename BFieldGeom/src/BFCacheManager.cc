@@ -9,8 +9,8 @@ namespace mu2e {
     innerForLastOuter(0),
     counter(0)
     {
-        outerCache.insert( std::make_pair<std::shared_ptr<const BFMap>>(0, CacheElement(0, MapList())) );
-        CacheType::const_iterator p = outerCache.find(0);
+        outerCache.insert(std::make_pair(static_cast<const BFMap*>(nullptr), CacheElement(nullptr, MapList())));
+        CacheType::const_iterator p = outerCache.find(nullptr);
         assert(p != outerCache.end());
         innerForLastOuter = &p->second;
     }
@@ -34,17 +34,17 @@ namespace mu2e {
 
         for (Iter i = innerMaps.begin(); i != innerMaps.end(); ++i) {
             // or can assign a dedicated innerList for this map, e.g. using hints from FHICL
-            innerCache.insert(std::make_pair(*i, CacheElement(*i, defaultInnerList)));
+            innerCache.insert(std::make_pair(i->get(), CacheElement(*i, defaultInnerList)));
         }
 
         for (Iter i = outerMaps.begin(); i != outerMaps.end(); ++i) {
             // or can assign a dedicated innerList for this map, e.g. using hints from FHICL
-            outerCache.insert(std::make_pair(*i, CacheElement(*i, defaultInnerList)));
+            outerCache.insert(std::make_pair(i->get(), CacheElement(*i, defaultInnerList)));
         }
 
-        CacheType::iterator p = outerCache.find(0);
+        CacheType::iterator p = outerCache.find(nullptr);
         assert(p != outerCache.end());
-        p->second = CacheElement(0, defaultInnerList);
+        p->second = CacheElement(nullptr, defaultInnerList);
         innerForLastOuter = &p->second;
     }
 }  // namespace mu2e

@@ -32,14 +32,14 @@ namespace mu2e {
         typedef std::vector<std::shared_ptr<const BFMap>> MapContainerType;
 
         struct MapList : public MapContainerType {
-            // return the first matching map or 0
-            std::shared_ptr<const BFMap> findMap(const CLHEP::Hep3Vector& x) const {
-                for (MapContainerType::const_iterator i = begin(); i != end(); ++i) {
-                    if ((*i)->isValid(x)) {
-                        return *i;
+            // return the first matching map or nullptr
+            const BFMap* findMap(const CLHEP::Hep3Vector& x) const {
+                for (const auto& m : *this) {
+                    if (m->isValid(x)) {
+                        return m.get();
                     }
                 }
-                return 0;
+                return nullptr;
             }
         };
 
@@ -61,9 +61,9 @@ namespace mu2e {
         // Outer maps in the user-specified order
         MapList outer;
 
-        typedef std::map<std::shared_ptr<const BFMap>, CacheElement> CacheType;
+        typedef std::map<const BFMap*, CacheElement> CacheType;
         CacheType innerCache;  // keys are all inner maps
-        CacheType outerCache;  // keys are outer maps and 0
+        CacheType outerCache;  // keys are outer maps and nullptr
         int counter;
 
        public:
@@ -71,19 +71,19 @@ namespace mu2e {
 
         void setMaps(const MapContainerType& innerMaps, const MapContainerType& outerMaps);
 
-        // Returns pointers to an appropriate field map, or 0.
-        std::shared_ptr<const BFMap> findMap(const CLHEP::Hep3Vector& x) const {
+        // Returns the field map for x, or nullptr; a raw pointer, as a shared_ptr copy per call contends across threads
+        const BFMap* findMap(const CLHEP::Hep3Vector& x) const {
             // First try to find if the point belong to any of the inner maps
 
             if (innerForLastInner) {  // we were in an inner map last time
 
                 if (innerForLastInner->myMap->isValid(x)) {
                     // Cache update not needed, we are still in the same inner map
-                    return innerForLastInner->myMap;
+                    return innerForLastInner->myMap.get();
                 }
 
                 // The lookup order here is optimized
-                std::shared_ptr<const BFMap> newinner = innerForLastInner->inner.findMap(x);
+                const BFMap* newinner = innerForLastInner->inner.findMap(x);
                 if (newinner) {  // Update cache
                     CacheType::const_iterator p = innerCache.find(newinner);
                     assert(p != innerCache.end());
@@ -93,7 +93,7 @@ namespace mu2e {
             } else {  // We were not in an inner map last time
 
                 // innerForLastOuter is never null
-                std::shared_ptr<const BFMap> newinner = innerForLastOuter->inner.findMap(x);
+                const BFMap* newinner = innerForLastOuter->inner.findMap(x);
                 if (newinner) {  // Update cache
                     CacheType::const_iterator p = innerCache.find(newinner);
                     assert(p != innerCache.end());
@@ -106,10 +106,10 @@ namespace mu2e {
             innerForLastInner = 0;
 
             // The lookup order of the outer maps is always the same
-            std::shared_ptr<const BFMap> newouter = outer.findMap(x);
+            const BFMap* newouter = outer.findMap(x);
 
             // Keep the inner map lookup optimized
-            if (innerForLastOuter->myMap != newouter) {
+            if (innerForLastOuter->myMap.get() != newouter) {
                 CacheType::const_iterator p = outerCache.find(newouter);
                 assert(p != outerCache.end());
                 innerForLastOuter = &p->second;
