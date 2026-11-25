@@ -178,7 +178,8 @@ namespace mu2e {
 
     Mu2eProductMixer(const Config& conf, art::MixHelper& helper);
 
-    void startEvent(art::Event const& e);
+    // nDraws is the number of secondary events mixed into this event
+    void startEvent(art::Event const& e, unsigned nDraws = 1);
     void processEventIDs(const art::EventIDSequence& seq);
     void beginSubRun(const art::SubRun& sr);
     void endSubRun(art::SubRun& sr);

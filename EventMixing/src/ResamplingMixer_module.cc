@@ -13,6 +13,7 @@
 #include "fhiclcpp/types/Table.h"
 #include "fhiclcpp/types/TupleAs.h"
 #include "canvas/Utilities/InputTag.h"
+#include "cetlib_except/exception.h"
 
 #include "Offline/SeedService/inc/SeedService.hh"
 #include "Offline/EventMixing/inc/Mu2eProductMixer.hh"
@@ -28,6 +29,7 @@ namespace mu2e {
     Mu2eProductMixer spm_;
     const int debugLevel_;
     const unsigned maxEventsToSkip_;
+    const unsigned nSecondaries_;
     bool skipDrawn_ = false; // per instance: only the first call draws a random skip
     bool writeEventIDs_;
     art::EventIDSequence idseq_;
@@ -55,6 +57,11 @@ namespace mu2e {
       fhicl::Atom<unsigned> maxEventsToSkip { Name("MaxEventsToSkip"),
           Comment("Maximum number of events to skip at the beginning of the first secondary input file in sequential readMode.\n"),
           0u };
+
+      fhicl::Atom<unsigned> nSecondaries { Name("nSecondaries"),
+          Comment("Number of secondary events mixed into each output event (at least 1).\n"
+                  "All of them share the event's simTimeOffset, if one is configured.\n"),
+          1u };
 
       fhicl::Atom<bool> writeEventIDs { Name("writeEventIDs"),
           Comment("Write out IDs of events on the secondary input stream."),
@@ -85,7 +92,7 @@ namespace mu2e {
       }
       return result;
     }
-    size_t nSecondaries() const { return (size_t) 1; }
+    size_t nSecondaries() const { return nSecondaries_; }
 
     void processEventIDs(const art::EventIDSequence& seq);
 
@@ -100,10 +107,14 @@ namespace mu2e {
     : spm_{ pars().mu2e().products(), helper }
     , debugLevel_{ pars().mu2e().debugLevel() }
     , maxEventsToSkip_{ pars().mu2e().maxEventsToSkip() }
+    , nSecondaries_{ pars().mu2e().nSecondaries() }
     , writeEventIDs_{ pars().mu2e().writeEventIDs() }
     , engine_{helper.createEngine(art::ServiceHandle<SeedService>()->getSeed())}
     , urbg_{ engine_ }
     {
+      if(nSecondaries_ < 1) {
+        throw cet::exception("BADCONFIG") << "ResamplingMixer: nSecondaries must be at least 1\n";
+      }
       if(writeEventIDs_) {
         helper.produces<art::EventIDSequence>();
       }
@@ -123,7 +134,7 @@ namespace mu2e {
   }
 
   void ResamplingMixerDetail::startEvent(art::Event const& e) {
-    spm_.startEvent(e);
+    spm_.startEvent(e, nSecondaries_);
   }
 
   void ResamplingMixerDetail::finalizeEvent(art::Event& e) {

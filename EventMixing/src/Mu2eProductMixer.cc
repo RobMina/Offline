@@ -239,13 +239,13 @@ namespace mu2e {
   }
 
   //================================================================
-  void Mu2eProductMixer::startEvent(art::Event const& e) {
+  void Mu2eProductMixer::startEvent(art::Event const& e, unsigned nDraws) {
     if(applyTimeOffset_){
     // find the time offset in the event, and copy it locally
       const auto& stoH = e.getValidHandle<SimTimeOffset>(timeOffsetTag_);
       stoff_ = *stoH;
     }
-    resampledEvents_++;
+    resampledEvents_ += nDraws;
   }
 
   //----------------------------------------------------------------
@@ -297,7 +297,7 @@ namespace mu2e {
     }
     if (mixStageNorm_) {
       if(bootstrapStageNorm_) {
-        // resampledEvents_ is the draw count (startEvent increments it), so the
+        // resampledEvents_ is the draw count (startEvent adds nDraws), so the
         // bootstrap needs no mix op and cannot disagree with one.
         if(resampledEvents_ == 0) {
           throw cet::exception("BADINPUT")
@@ -766,36 +766,35 @@ namespace mu2e {
 
 
   //----------------------------------------------------------------
-  // Called once per OUTPUT event with the drawn secondary's SubRun product, so
-  // this accumulates per draw rather than latching. That is the whole
-  // difference from the cosmic path, which requires every draw to come from one
-  // subrun; a beam pool spans thousands, and each may have its own efficiency.
+  // Called once per OUTPUT event with the SubRun product of each drawn secondary
+  // (one entry per draw), so this accumulates per draw rather than latching.
+  // That is the whole difference from the cosmic path, which requires every draw
+  // to come from one subrun; a beam pool spans thousands, and each may have its
+  // own efficiency.
   bool Mu2eProductMixer::mixStageNormalization(std::vector<StageNormalization const*> const& in,
                                                StageNormalization& out,
                                                art::PtrRemapper const&)
   {
-    ++nDraws_;
-    if(in.size() > 1) {
-      throw cet::exception("BADINPUT")
-        << "Mu2eProductMixer/subrun: can't mix StageNormalization from "
-        << in.size() << " secondaries\n";
-    }
-    if(in.size() == 1 && in[0]->valid()) {
-      // One draw stands for one input event, which stands for perEvent()
-      // origin-generated events.
-      perEventSum_ += in[0]->perEvent();
-      upstreamStages_ = std::max(upstreamStages_, in[0]->nStages());
-      upstreamFromOrigin_ = upstreamFromOrigin_ && in[0]->fromOrigin();
-    } else {
-      // The product is there but was never seeded (nStages 0). Refused on the
-      // spot: a subrun-end failure makes a day-long job find out at its last
-      // step, and a normalization built from only some of the draws would be
-      // short by exactly the fraction that was skipped.
-      throw cet::exception("BADINPUT")
-        << "Mu2eProductMixer/stageNormMixer: draw " << nDraws_ << " comes from "
-        << "a subrun whose StageNormalization was never seeded (nStages 0), so "
-        << "what that event represents is unknown. The pool was written by a "
-        << "counter that found no normalization of its own.\n";
+    const std::size_t nIn = std::max<std::size_t>(in.size(), 1);
+    for(std::size_t i = 0; i < nIn; ++i) {
+      ++nDraws_;
+      if(i < in.size() && in[i]->valid()) {
+        // One draw stands for one input event, which stands for perEvent()
+        // origin-generated events.
+        perEventSum_ += in[i]->perEvent();
+        upstreamStages_ = std::max(upstreamStages_, in[i]->nStages());
+        upstreamFromOrigin_ = upstreamFromOrigin_ && in[i]->fromOrigin();
+      } else {
+        // The product is there but was never seeded (nStages 0). Refused on the
+        // spot: a subrun-end failure makes a day-long job find out at its last
+        // step, and a normalization built from only some of the draws would be
+        // short by exactly the fraction that was skipped.
+        throw cet::exception("BADINPUT")
+          << "Mu2eProductMixer/stageNormMixer: draw " << nDraws_ << " comes from "
+          << "a subrun whose StageNormalization was never seeded (nStages 0), so "
+          << "what that event represents is unknown. The pool was written by a "
+          << "counter that found no normalization of its own.\n";
+      }
     }
     return false;
   }
